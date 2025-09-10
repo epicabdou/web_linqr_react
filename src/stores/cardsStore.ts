@@ -26,6 +26,47 @@ export const $canCreateCard = computed([$cards, $isPremium], (cards, isPremium) 
     return cards.length < 1; // Free limit
 });
 
+// Helper function to ensure user profile exists
+const ensureProfileExists = async (userId: string, userEmail?: string) => {
+    try {
+        // Check if profile exists
+        const { data: existingProfile, error: fetchError } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('id', userId)
+            .single();
+
+        if (existingProfile) {
+            return { success: true };
+        }
+
+        // If profile doesn't exist, create it
+        if (fetchError && fetchError.code === 'PGRST116') { // No rows returned
+            const { error: insertError } = await supabase
+                .from('profiles')
+                .insert({
+                    id: userId,
+                    email: userEmail || '',
+                    first_name: null,
+                    last_name: null
+                });
+
+            if (insertError) {
+                console.error('Failed to create profile:', insertError);
+                return { success: false, error: insertError.message };
+            }
+
+            return { success: true };
+        }
+
+        // Other errors
+        return { success: false, error: fetchError?.message || 'Unknown error checking profile' };
+    } catch (error) {
+        console.error('Error ensuring profile exists:', error);
+        return { success: false, error: 'Failed to ensure profile exists' };
+    }
+};
+
 // Database mapping helpers
 const mapDbCardToCard = (dbCard: any): Card => ({
     id: dbCard.id,
@@ -133,6 +174,13 @@ export const cardsActions = {
         try {
             $loading.set(true);
             $error.set(null);
+
+            // Ensure user profile exists before creating card
+            const profileResult = await ensureProfileExists(userId, cardData.email);
+            if (!profileResult.success) {
+                $error.set(`Profile error: ${profileResult.error}`);
+                return { success: false, error: profileResult.error };
+            }
 
             const dbCard = mapCardToDbCard(cardData, userId);
 
@@ -353,8 +401,7 @@ export const cardsActions = {
                 return { success: false, error: error.message };
             }
 
-            // The scan count will be updated automatically by the database trigger
-            // But we can also update it locally for immediate feedback
+            // Update scan count in local state
             const cards = $cards.get();
             const updatedCards = cards.map(card =>
                 card.id === cardId
@@ -379,74 +426,4 @@ export const cardsActions = {
     clearError: () => {
         $error.set(null);
     }
-}; {
-    $loading.set(true);
-    $error.set(null);
-
-    const { data, error } = await supabase
-        .from('cards')
-        .select('*')
-        .eq('id', cardId)
-        .single();
-
-    if (error) {
-        $error.set(error.message);
-        return { success: false, error: error.message };
-    }
-
-    const card = mapDbCardToCard(data);
-    return { success: true, data: card };
-} catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Failed to get card';
-    $error.set(errorMessage);
-    return { success: false, error: errorMessage };
-} finally {
-    $loading.set(false);
-}
-},
-
-// Record card scan
-recordScan: async (cardId: number, scanData?: any) => {
-    try {
-        const { error } = await supabase
-            .from('scans')
-            .insert({
-                card_id: cardId,
-                scanned_at: new Date().toISOString(),
-                location: scanData?.location,
-                device_info: scanData?.deviceInfo,
-                referrer: scanData?.referrer,
-                ip_address: scanData?.ipAddress
-            });
-
-        if (error) {
-            console.error('Failed to record scan:', error);
-            return { success: false, error: error.message };
-        }
-
-        // Update scan count in local state
-        const cards = $cards.get();
-        const updatedCards = cards.map(card =>
-            card.id === cardId
-                ? { ...card, scanCount: (card.scanCount || 0) + 1 }
-                : card
-        );
-        $cards.set(updatedCards);
-
-        return { success: true };
-    } catch (error) {
-        console.error('Failed to record scan:', error);
-        return { success: false, error: 'Failed to record scan' };
-    }
-},
-
-    // Set selected card
-    setSelectedCard: (card: Card | null) => {
-    $selectedCard.set(card);
-},
-
-    // Clear error
-    clearError: () => {
-    $error.set(null);
-}
 };
