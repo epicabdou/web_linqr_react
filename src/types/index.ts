@@ -22,6 +22,8 @@ export interface Card {
         url: string;
     }>;
     template: string;
+    isActive?: boolean;
+    scanCount?: number;
     createdAt?: Date;
     updatedAt?: Date;
 }
@@ -99,4 +101,26 @@ export interface PhysicalCard {
         zipCode: string;
         country: string;
     };
+}
+
+export interface Scan {
+    id: number;
+    cardId: number;
+    scannedBy?: string;
+    scannedAt: Date;
+    location?: {
+        city: string;
+        country: string;
+        coordinates?: {
+            lat: number;
+            lng: number;
+        };
+    };
+    deviceInfo?: {
+        type: string;
+        browser: string;
+        os: string;
+    };
+    referrer?: string;
+    ipAddress?: string;
 }
