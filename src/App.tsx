@@ -4,6 +4,7 @@ import Navigation from './components/Navigation';
 import Dashboard from './components/Dashboard';
 import CardsView from './components/CardsView';
 import CreateCardView from './components/cards/CreateCardView';
+import EditCardView from './components/cards/EditCardView';
 import UpgradeView from './components/UpgradeView';
 import ContactsManagement from './components/contacts/ContactsManagement';
 import AnalyticsDashboard from './components/analytics/AnalyticsDashboard';
@@ -13,32 +14,27 @@ import Loading from './components/ui/Loading';
 import {
     $isAuthenticated,
     $loading as $authLoading,
+    $isPremium,
     authActions
 } from './stores/authStore';
-import { cardsActions } from './stores/cardsStore';
-import { Card } from './types';
-
-export interface AppProps {
-    currentView: string;
-    setCurrentView: (view: string) => void;
-    cards: Card[];
-    setCards: (cards: Card[]) => void;
-    selectedCard: Card | null;
-    setSelectedCard: (card: Card | null) => void;
-    isPremium: boolean;
-    setIsPremium: (premium: boolean) => void;
-}
+import {
+    $cards,
+    $selectedCard,
+    cardsActions
+} from './stores/cardsStore';
+import Button from "./components/ui/Button";
 
 const App: React.FC = () => {
     const [currentView, setCurrentView] = useState('dashboard');
-    const [cards, setCards] = useState<Card[]>([]);
-    const [selectedCard, setSelectedCard] = useState<Card | null>(null);
-    const [isPremium, setIsPremium] = useState(false);
     const [showAuthModal, setShowAuthModal] = useState(false);
     const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
 
+    // Use store values instead of local state
     const isAuthenticated = useStore($isAuthenticated);
     const authLoading = useStore($authLoading);
+    const cards = useStore($cards);
+    const selectedCard = useStore($selectedCard);
+    const isPremium = useStore($isPremium);
 
     // Initialize data when user is authenticated
     useEffect(() => {
@@ -56,24 +52,14 @@ const App: React.FC = () => {
         }
     }, [authLoading, isAuthenticated]);
 
-    const appProps: AppProps = {
-        currentView,
-        setCurrentView,
-        cards,
-        setCards,
-        selectedCard,
-        setSelectedCard,
-        isPremium,
-        setIsPremium
-    };
-
     const handleSignOut = async () => {
-        await authActions.signOut();
-        setCurrentView('dashboard');
-        setCards([]);
-        setSelectedCard(null);
-        setIsPremium(false);
-        setShowAuthModal(true);
+        try {
+            await authActions.signOut();
+            setCurrentView('dashboard');
+            setShowAuthModal(true);
+        } catch (error) {
+            console.error('Logout failed:', error);
+        }
     };
 
     const renderCurrentView = () => {
@@ -111,30 +97,33 @@ const App: React.FC = () => {
                                 <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mx-auto mb-4">
                                     <span className="text-2xl">🎨</span>
                                 </div>
-                                <h3 className="text-lg font-semibold text-gray-900 mb-2">Beautiful Design</h3>
-                                <p className="text-gray-600">Choose from multiple templates and customize your style</p>
+                                <h3 className="text-lg font-semibold text-gray-900 mb-2">Custom Templates</h3>
+                                <p className="text-gray-600">Choose from beautiful, professional templates</p>
                             </div>
                         </div>
 
-                        <div className="flex justify-center space-x-4">
-                            <button
+                        <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                            <Button
                                 onClick={() => {
                                     setAuthMode('signup');
                                     setShowAuthModal(true);
                                 }}
-                                className="bg-blue-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+                                size="lg"
+                                className="px-8"
                             >
                                 Get Started Free
-                            </button>
-                            <button
+                            </Button>
+                            <Button
+                                variant="outline"
                                 onClick={() => {
                                     setAuthMode('signin');
                                     setShowAuthModal(true);
                                 }}
-                                className="bg-gray-100 text-gray-900 px-8 py-3 rounded-lg font-semibold hover:bg-gray-200 transition-colors"
+                                size="lg"
+                                className="px-8"
                             >
                                 Sign In
-                            </button>
+                            </Button>
                         </div>
                     </div>
                 </div>
@@ -143,21 +132,62 @@ const App: React.FC = () => {
 
         switch (currentView) {
             case 'dashboard':
-                return <Dashboard {...appProps} />;
+                return (
+                    <Dashboard
+                        cards={cards}
+                        setCurrentView={setCurrentView}
+                    />
+                );
             case 'cards':
-                return <CardsView {...appProps} />;
+                return (
+                    <CardsView
+                        cards={cards}
+                        isPremium={isPremium}
+                        setCurrentView={setCurrentView}
+                        setSelectedCard={(card) => cardsActions.setSelectedCard(card)}
+                    />
+                );
             case 'create-card':
                 return <CreateCardView setCurrentView={setCurrentView} />;
+            case 'edit-card':
+                return <EditCardView setCurrentView={setCurrentView} />;
             case 'upgrade':
-                return <UpgradeView {...appProps} />;
+                return (
+                    <UpgradeView
+                        currentView={currentView}
+                        setCurrentView={setCurrentView}
+                        cards={cards}
+                        setCards={() => {}} // Not needed with store
+                        selectedCard={selectedCard}
+                        setSelectedCard={(card) => cardsActions.setSelectedCard(card)}
+                        isPremium={isPremium}
+                        setIsPremium={() => {}} // Not needed with store
+                    />
+                );
             case 'contacts':
                 return <ContactsManagement setCurrentView={setCurrentView} />;
             case 'analytics':
                 return <AnalyticsDashboard setCurrentView={setCurrentView} />;
             case 'settings':
-                return <SettingsView {...appProps} />;
+                return (
+                    <SettingsView
+                        currentView={currentView}
+                        setCurrentView={setCurrentView}
+                        cards={cards}
+                        setCards={() => {}} // Not needed with store
+                        selectedCard={selectedCard}
+                        setSelectedCard={(card) => cardsActions.setSelectedCard(card)}
+                        isPremium={isPremium}
+                        setIsPremium={() => {}} // Not needed with store
+                    />
+                );
             default:
-                return <Dashboard {...appProps} />;
+                return (
+                    <Dashboard
+                        cards={cards}
+                        setCurrentView={setCurrentView}
+                    />
+                );
         }
     };
 
@@ -173,10 +203,8 @@ const App: React.FC = () => {
     return (
         <div className="min-h-screen bg-gray-50">
             <Navigation
-                {...appProps}
-                onSignOut={handleSignOut}
-                showAuthButton={!isAuthenticated}
-                onAuthClick={() => setShowAuthModal(true)}
+                currentView={currentView}
+                setCurrentView={setCurrentView}
             />
             {renderCurrentView()}
 

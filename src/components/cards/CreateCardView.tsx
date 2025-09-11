@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useStore } from '@nanostores/react';
 import { ArrowLeft, Save, Eye } from 'lucide-react';
 import { cardsActions, $loading, $error } from '../../stores/cardsStore';
@@ -17,10 +17,37 @@ const CreateCardView: React.FC<CreateCardViewProps> = ({ setCurrentView }) => {
     const [showPreview, setShowPreview] = useState(false);
     const [previewCard, setPreviewCard] = useState<Partial<Card> | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [currentFormData, setCurrentFormData] = useState<Partial<Card> | null>(null);
 
     const loading = useStore($loading);
     const error = useStore($error);
     const isPremium = useStore($isPremium);
+
+    // Auto-update preview when form data changes
+    useEffect(() => {
+        if (currentFormData && (currentFormData.firstName || currentFormData.lastName || currentFormData.email)) {
+            const mockCard: Card = {
+                id: 999, // Mock ID for preview
+                firstName: currentFormData.firstName || '',
+                lastName: currentFormData.lastName || '',
+                title: currentFormData.title || '',
+                industry: currentFormData.industry || '',
+                bio: currentFormData.bio || '',
+                photo: currentFormData.photo || null,
+                phone: currentFormData.phone || '',
+                email: currentFormData.email || '',
+                address: currentFormData.address || '',
+                socialMedia: currentFormData.socialMedia || {},
+                customLinks: currentFormData.customLinks || [],
+                template: currentFormData.template || 'modern',
+                isActive: true,
+                scanCount: 0,
+                createdAt: new Date(),
+                updatedAt: new Date()
+            };
+            setPreviewCard(mockCard);
+        }
+    }, [currentFormData]);
 
     const handleSaveCard = async (cardData: Partial<Card>) => {
         try {
@@ -32,8 +59,6 @@ const CreateCardView: React.FC<CreateCardViewProps> = ({ setCurrentView }) => {
                 throw new Error('First name, last name, and email are required');
             }
 
-            // Check premium limits
-            // This should be handled in the store, but adding extra validation
             const result = await cardsActions.createCard(cardData);
 
             if (result.success) {
@@ -51,6 +76,8 @@ const CreateCardView: React.FC<CreateCardViewProps> = ({ setCurrentView }) => {
     };
 
     const handlePreview = (cardData: Partial<Card>) => {
+        console.log('Preview triggered with data:', cardData);
+
         // Create a preview card with mock ID for preview
         const mockCard: Card = {
             id: 999, // Mock ID for preview
@@ -74,11 +101,22 @@ const CreateCardView: React.FC<CreateCardViewProps> = ({ setCurrentView }) => {
 
         setPreviewCard(mockCard);
         setShowPreview(true);
+        console.log('Preview card set:', mockCard);
+    };
+
+    const handleFormChange = (cardData: Partial<Card>) => {
+        console.log('Form data changed:', cardData);
+        setCurrentFormData(cardData);
     };
 
     const handleBackToEdit = () => {
         setShowPreview(false);
-        setPreviewCard(null);
+    };
+
+    const handleManualPreview = () => {
+        if (currentFormData) {
+            handlePreview(currentFormData);
+        }
     };
 
     if (loading && !isSubmitting) {
@@ -114,15 +152,12 @@ const CreateCardView: React.FC<CreateCardViewProps> = ({ setCurrentView }) => {
                     </div>
                 </div>
 
-                {/* Preview Toggle */}
-                {!showPreview && (
+                {/* Manual Preview Toggle */}
+                {!showPreview && previewCard && (
                     <Button
                         variant="outline"
-                        onClick={() => {
-                            // We'll trigger preview from the form
-                        }}
+                        onClick={handleManualPreview}
                         icon={Eye}
-                        disabled={!previewCard}
                     >
                         Preview
                     </Button>
@@ -154,8 +189,10 @@ const CreateCardView: React.FC<CreateCardViewProps> = ({ setCurrentView }) => {
                             onSave={handleSaveCard}
                             onCancel={() => setCurrentView('cards')}
                             onPreview={handlePreview}
+                            onChange={handleFormChange}
                             isSubmitting={isSubmitting}
                             showPreviewButton={true}
+                            isPremium={isPremium}
                         />
                     </div>
                 </div>
@@ -163,13 +200,13 @@ const CreateCardView: React.FC<CreateCardViewProps> = ({ setCurrentView }) => {
                 {/* Preview Section */}
                 <div className={!showPreview ? 'hidden lg:block' : ''}>
                     <div className="bg-gray-50 rounded-lg p-6 min-h-[600px] flex items-center justify-center">
-                        {previewCard ? (
+                        {previewCard && (previewCard.firstName || previewCard.lastName || previewCard.email) ? (
                             <div className="w-full max-w-sm">
                                 <h3 className="text-lg font-semibold text-gray-900 mb-4 text-center">
                                     Live Preview
                                 </h3>
                                 <CardPreview
-                                    card={previewCard}
+                                    card={previewCard as Card}
                                     setCurrentView={() => {}}
                                     setSelectedCard={() => {}}
                                     isPreview={true}
@@ -231,7 +268,7 @@ const CreateCardView: React.FC<CreateCardViewProps> = ({ setCurrentView }) => {
                         {previewCard && (
                             <div className="max-w-sm mx-auto">
                                 <CardPreview
-                                    card={previewCard}
+                                    card={previewCard as Card}
                                     setCurrentView={() => {}}
                                     setSelectedCard={() => {}}
                                     isPreview={true}

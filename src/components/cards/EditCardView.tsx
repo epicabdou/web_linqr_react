@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useStore } from '@nanostores/react';
 import { ArrowLeft, Save, Eye, Trash2 } from 'lucide-react';
-import { cardsActions, $loading, $error, $selectedCard } from '../../stores/cardsStore';
+import { cardsActions, $cardsLoading, $cardsError, $selectedCard, $isPremium } from '../../stores';
 import Button from '../ui/Button';
 import CardForm from './CardForm';
 import CardPreview from './CardPreview';
@@ -19,10 +19,12 @@ const EditCardView: React.FC<EditCardViewProps> = ({ setCurrentView }) => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
+    const [currentFormData, setCurrentFormData] = useState<Partial<Card> | null>(null);
 
-    const loading = useStore($loading);
-    const error = useStore($error);
+    const loading = useStore($cardsLoading);
+    const error = useStore($cardsError);
     const selectedCard = useStore($selectedCard);
+    const isPremium = useStore($isPremium);
 
     // Redirect if no card is selected
     useEffect(() => {
@@ -30,6 +32,28 @@ const EditCardView: React.FC<EditCardViewProps> = ({ setCurrentView }) => {
             setCurrentView('cards');
         }
     }, [loading, selectedCard, setCurrentView]);
+
+    // Auto-update preview when form data changes
+    useEffect(() => {
+        if (currentFormData && selectedCard) {
+            const mockCard: Card = {
+                ...selectedCard,
+                firstName: currentFormData.firstName || selectedCard.firstName,
+                lastName: currentFormData.lastName || selectedCard.lastName,
+                title: currentFormData.title || selectedCard.title,
+                industry: currentFormData.industry || selectedCard.industry,
+                bio: currentFormData.bio || selectedCard.bio,
+                photo: currentFormData.photo || selectedCard.photo,
+                phone: currentFormData.phone || selectedCard.phone,
+                email: currentFormData.email || selectedCard.email,
+                address: currentFormData.address || selectedCard.address,
+                socialMedia: currentFormData.socialMedia || selectedCard.socialMedia,
+                customLinks: currentFormData.customLinks || selectedCard.customLinks,
+                template: currentFormData.template || selectedCard.template
+            };
+            setPreviewCard(mockCard);
+        }
+    }, [currentFormData, selectedCard]);
 
     const handleUpdateCard = async (cardData: Partial<Card>) => {
         if (!selectedCard) return;
@@ -107,9 +131,12 @@ const EditCardView: React.FC<EditCardViewProps> = ({ setCurrentView }) => {
         setShowPreview(true);
     };
 
+    const handleFormChange = (cardData: Partial<Card>) => {
+        setCurrentFormData(cardData);
+    };
+
     const handleBackToEdit = () => {
         setShowPreview(false);
-        setPreviewCard(null);
     };
 
     if (loading) {
@@ -150,7 +177,7 @@ const EditCardView: React.FC<EditCardViewProps> = ({ setCurrentView }) => {
                     </Button>
                     <div>
                         <h1 className="text-3xl font-bold text-gray-900">
-                            {showPreview ? 'Preview Card' : 'Edit Card'}
+                            {showPreview ? 'Preview Changes' : 'Edit Card'}
                         </h1>
                         <p className="mt-2 text-gray-600">
                             {showPreview
@@ -202,9 +229,11 @@ const EditCardView: React.FC<EditCardViewProps> = ({ setCurrentView }) => {
                             onSave={handleUpdateCard}
                             onCancel={() => setCurrentView('cards')}
                             onPreview={handlePreview}
+                            onChange={handleFormChange}
                             isEditing={true}
                             isSubmitting={isSubmitting}
                             showPreviewButton={true}
+                            isPremium={isPremium}
                         />
                     </div>
                 </div>
@@ -308,15 +337,10 @@ const EditCardView: React.FC<EditCardViewProps> = ({ setCurrentView }) => {
                 isOpen={showDeleteModal}
                 onClose={() => setShowDeleteModal(false)}
                 title="Delete Card"
-                size="sm"
             >
-                <div className="text-center py-4">
-                    <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <Trash2 className="h-6 w-6 text-red-600" />
-                    </div>
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Delete this card?</h3>
+                <div className="p-6">
                     <p className="text-gray-600 mb-6">
-                        This action cannot be undone. The card and all its analytics data will be permanently deleted.
+                        Are you sure you want to delete this card? This action cannot be undone.
                     </p>
                     <div className="flex space-x-3">
                         <Button
@@ -328,11 +352,10 @@ const EditCardView: React.FC<EditCardViewProps> = ({ setCurrentView }) => {
                             Cancel
                         </Button>
                         <Button
-                            variant="danger"
                             onClick={handleDeleteCard}
                             loading={isDeleting}
                             disabled={isDeleting}
-                            className="flex-1"
+                            className="flex-1 bg-red-600 hover:bg-red-700"
                         >
                             Delete Card
                         </Button>
