@@ -1,375 +1,367 @@
-import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
 import { useStore } from '@nanostores/react';
-import { ArrowLeft, Save, Eye } from 'lucide-react';
-import { $cards, cardsActions } from '../../stores/cardsStore';
-import { Card } from '../../types';
+import { ArrowLeft, Save, Eye, Trash2 } from 'lucide-react';
+import { cardsActions, $cardsLoading, $cardsError, $selectedCard, $isPremium } from '../../stores';
 import Button from '../ui/Button';
+import CardForm from './CardForm';
+import CardPreview from './CardPreview';
 import Loading from '../ui/Loading';
+import Modal from '../ui/Modal';
+import { Card } from '../../types';
 
-const EditCardView: React.FC = () => {
-    const { cardId } = useParams<{ cardId: string }>();
-    const navigate = useNavigate();
-    const cards = useStore($cards);
+interface EditCardViewProps {
+    setCurrentView: (view: string) => void;
+}
 
-    const [card, setCard] = useState<Card | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [saving, setSaving] = useState(false);
-    const [formData, setFormData] = useState({
-        name: '',
-        title: '',
-        company: '',
-        email: '',
-        phone: '',
-        website: '',
-        linkedin: '',
-        twitter: '',
-        instagram: '',
-        address: '',
-        bio: '',
-        profileImage: ''
-    });
+const EditCardView: React.FC<EditCardViewProps> = ({ setCurrentView }) => {
+    const [showPreview, setShowPreview] = useState(false);
+    const [previewCard, setPreviewCard] = useState<Card | null>(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
+    const [currentFormData, setCurrentFormData] = useState<Partial<Card> | null>(null);
 
+    const loading = useStore($cardsLoading);
+    const error = useStore($cardsError);
+    const selectedCard = useStore($selectedCard);
+    const isPremium = useStore($isPremium);
+
+    // Redirect if no card is selected
     useEffect(() => {
-        if (!cardId) {
-            navigate('/cards');
-            return;
+        if (!loading && !selectedCard) {
+            setCurrentView('cards');
         }
+    }, [loading, selectedCard, setCurrentView]);
 
-        const foundCard = cards.find(c => c.id === parseInt(cardId));
-        if (foundCard) {
-            setCard(foundCard);
-            setFormData({
-                name: foundCard.name || '',
-                title: foundCard.title || '',
-                company: foundCard.company || '',
-                email: foundCard.email || '',
-                phone: foundCard.phone || '',
-                website: foundCard.website || '',
-                linkedin: foundCard.linkedin || '',
-                twitter: foundCard.twitter || '',
-                instagram: foundCard.instagram || '',
-                address: foundCard.address || '',
-                bio: foundCard.bio || '',
-                profileImage: foundCard.profileImage || ''
-            });
-            setLoading(false);
-        } else {
-            // Card not found in store, try to fetch it
-            cardsActions.fetchCard(parseInt(cardId)).then((fetchedCard) => {
-                if (fetchedCard) {
-                    setCard(fetchedCard);
-                    setFormData({
-                        name: fetchedCard.name || '',
-                        title: fetchedCard.title || '',
-                        company: fetchedCard.company || '',
-                        email: fetchedCard.email || '',
-                        phone: fetchedCard.phone || '',
-                        website: fetchedCard.website || '',
-                        linkedin: fetchedCard.linkedin || '',
-                        twitter: fetchedCard.twitter || '',
-                        instagram: fetchedCard.instagram || '',
-                        address: fetchedCard.address || '',
-                        bio: fetchedCard.bio || '',
-                        profileImage: fetchedCard.profileImage || ''
-                    });
-                } else {
-                    navigate('/cards');
-                }
-                setLoading(false);
-            });
-        }
-    }, [cardId, cards, navigate]);
-
-    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-        const { name, value } = e.target;
-        setFormData(prev => ({
-            ...prev,
-            [name]: value
-        }));
-    };
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!card) return;
-
-        setSaving(true);
-        try {
-            // Split the name field into firstName and lastName
-            const nameParts = formData.name.split(' ');
-            const firstName = nameParts[0] || '';
-            const lastName = nameParts.slice(1).join(' ') || '';
-
-            const updateData = {
-                firstName,
-                lastName,
-                title: formData.title,
-                email: formData.email,
-                phone: formData.phone,
-                address: formData.address,
-                bio: formData.bio,
-                photo: formData.profileImage,
-                socialMedia: {
-                    linkedin: formData.linkedin,
-                    twitter: formData.twitter,
-                    instagram: formData.instagram
-                }
+    // Auto-update preview when form data changes
+    useEffect(() => {
+        if (currentFormData && selectedCard) {
+            const mockCard: Card = {
+                ...selectedCard,
+                firstName: currentFormData.firstName || selectedCard.firstName,
+                lastName: currentFormData.lastName || selectedCard.lastName,
+                title: currentFormData.title || selectedCard.title,
+                industry: currentFormData.industry || selectedCard.industry,
+                bio: currentFormData.bio || selectedCard.bio,
+                photo: currentFormData.photo || selectedCard.photo,
+                phone: currentFormData.phone || selectedCard.phone,
+                email: currentFormData.email || selectedCard.email,
+                address: currentFormData.address || selectedCard.address,
+                socialMedia: currentFormData.socialMedia || selectedCard.socialMedia,
+                customLinks: currentFormData.customLinks || selectedCard.customLinks,
+                template: currentFormData.template || selectedCard.template
             };
+            setPreviewCard(mockCard);
+        }
+    }, [currentFormData, selectedCard]);
 
-            await cardsActions.updateCard(card.id, updateData);
-            navigate('/cards');
-        } catch (error) {
-            console.error('Failed to update card:', error);
-            // You might want to show an error toast here
+    const handleUpdateCard = async (cardData: Partial<Card>) => {
+        if (!selectedCard) return;
+
+        try {
+            setIsSubmitting(true);
+            cardsActions.clearError();
+
+            // Validate required fields
+            if (!cardData.firstName || !cardData.lastName || !cardData.email) {
+                throw new Error('First name, last name, and email are required');
+            }
+
+            const result = await cardsActions.updateCard(selectedCard.id, cardData);
+
+            if (result.success) {
+                // Success! Redirect to cards view
+                setCurrentView('cards');
+            } else {
+                // Error handled by store
+                console.error('Failed to update card:', result.error);
+            }
+        } catch (err) {
+            console.error('Card update error:', err);
         } finally {
-            setSaving(false);
+            setIsSubmitting(false);
         }
     };
 
-    const handlePreview = () => {
-        if (card) {
-            window.open(`/card/${card.id}`, '_blank');
+    const handleDeleteCard = async () => {
+        if (!selectedCard) return;
+
+        try {
+            setIsDeleting(true);
+            cardsActions.clearError();
+
+            const result = await cardsActions.deleteCard(selectedCard.id);
+
+            if (result.success) {
+                // Success! Redirect to cards view
+                setShowDeleteModal(false);
+                setCurrentView('cards');
+            } else {
+                // Error handled by store
+                console.error('Failed to delete card:', result.error);
+            }
+        } catch (err) {
+            console.error('Card deletion error:', err);
+        } finally {
+            setIsDeleting(false);
         }
+    };
+
+    const handlePreview = (cardData: Partial<Card>) => {
+        if (!selectedCard) return;
+
+        // Create a preview card with updated data
+        const mockCard: Card = {
+            ...selectedCard,
+            firstName: cardData.firstName || selectedCard.firstName,
+            lastName: cardData.lastName || selectedCard.lastName,
+            title: cardData.title || selectedCard.title,
+            industry: cardData.industry || selectedCard.industry,
+            bio: cardData.bio || selectedCard.bio,
+            photo: cardData.photo || selectedCard.photo,
+            phone: cardData.phone || selectedCard.phone,
+            email: cardData.email || selectedCard.email,
+            address: cardData.address || selectedCard.address,
+            socialMedia: cardData.socialMedia || selectedCard.socialMedia,
+            customLinks: cardData.customLinks || selectedCard.customLinks,
+            template: cardData.template || selectedCard.template
+        };
+
+        setPreviewCard(mockCard);
+        setShowPreview(true);
+    };
+
+    const handleFormChange = (cardData: Partial<Card>) => {
+        setCurrentFormData(cardData);
+    };
+
+    const handleBackToEdit = () => {
+        setShowPreview(false);
     };
 
     if (loading) {
-        return <Loading />;
+        return (
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                <Loading centered text="Loading card..." />
+            </div>
+        );
     }
 
-    if (!card) {
+    if (!selectedCard) {
         return (
-            <div className="text-center py-12">
-                <div className="w-24 h-24 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                    <span className="text-4xl">❌</span>
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                <div className="text-center py-12">
+                    <p className="text-gray-500">Card not found</p>
+                    <Button
+                        onClick={() => setCurrentView('cards')}
+                        className="mt-4"
+                    >
+                        Back to Cards
+                    </Button>
                 </div>
-                <h2 className="text-2xl font-bold text-gray-900 mb-4">Card Not Found</h2>
-                <p className="text-gray-600 mb-8">
-                    The card you're trying to edit doesn't exist or you don't have permission to edit it.
-                </p>
-                <Link
-                    to="/cards"
-                    className="bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors inline-block"
-                >
-                    Back to My Cards
-                </Link>
             </div>
         );
     }
 
     return (
-        <div className="max-w-2xl mx-auto">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             {/* Header */}
             <div className="flex items-center justify-between mb-8">
                 <div className="flex items-center space-x-4">
-                    <Link
-                        to="/cards"
-                        className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                    <Button
+                        variant="ghost"
+                        onClick={() => setCurrentView('cards')}
+                        icon={ArrowLeft}
                     >
-                        <ArrowLeft className="h-5 w-5" />
-                    </Link>
+                        Back to Cards
+                    </Button>
                     <div>
-                        <h1 className="text-3xl font-bold text-gray-900">Edit Card</h1>
-                        <p className="text-gray-600 mt-1">Update your digital business card</p>
+                        <h1 className="text-3xl font-bold text-gray-900">
+                            {showPreview ? 'Preview Changes' : 'Edit Card'}
+                        </h1>
+                        <p className="mt-2 text-gray-600">
+                            {showPreview
+                                ? 'Review your changes before saving'
+                                : `Editing ${selectedCard.firstName} ${selectedCard.lastName}'s card`
+                            }
+                        </p>
                     </div>
                 </div>
 
-                <button
-                    onClick={handlePreview}
-                    className="flex items-center space-x-2 px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                    <Eye className="h-4 w-4" />
-                    <span>Preview</span>
-                </button>
+                {/* Actions */}
+                <div className="flex items-center space-x-3">
+                    {!showPreview && (
+                        <Button
+                            variant="outline"
+                            onClick={() => setShowDeleteModal(true)}
+                            icon={Trash2}
+                            className="text-red-600 hover:text-red-700 border-red-200 hover:border-red-300"
+                        >
+                            Delete
+                        </Button>
+                    )}
+                </div>
             </div>
 
-            {/* Form */}
-            <form onSubmit={handleSubmit} className="space-y-6">
-                <div className="bg-white rounded-lg shadow-sm border p-6">
-                    <h2 className="text-lg font-semibold text-gray-900 mb-4">Basic Information</h2>
+            {/* Error Display */}
+            {error && (
+                <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+                    <p className="text-sm text-red-700">{error}</p>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={cardsActions.clearError}
+                        className="mt-2"
+                    >
+                        Dismiss
+                    </Button>
+                </div>
+            )}
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
-                                Full Name *
-                            </label>
-                            <input
-                                type="text"
-                                id="name"
-                                name="name"
-                                required
-                                value={formData.name}
-                                onChange={handleInputChange}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            />
-                        </div>
-
-                        <div>
-                            <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-1">
-                                Job Title
-                            </label>
-                            <input
-                                type="text"
-                                id="title"
-                                name="title"
-                                value={formData.title}
-                                onChange={handleInputChange}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            />
-                        </div>
-
-                        <div>
-                            <label htmlFor="company" className="block text-sm font-medium text-gray-700 mb-1">
-                                Company
-                            </label>
-                            <input
-                                type="text"
-                                id="company"
-                                name="company"
-                                value={formData.company}
-                                onChange={handleInputChange}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            />
-                        </div>
-
-                        <div>
-                            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                                Email *
-                            </label>
-                            <input
-                                type="email"
-                                id="email"
-                                name="email"
-                                required
-                                value={formData.email}
-                                onChange={handleInputChange}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            />
-                        </div>
-
-                        <div>
-                            <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">
-                                Phone
-                            </label>
-                            <input
-                                type="tel"
-                                id="phone"
-                                name="phone"
-                                value={formData.phone}
-                                onChange={handleInputChange}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            />
-                        </div>
-
-                        <div>
-                            <label htmlFor="website" className="block text-sm font-medium text-gray-700 mb-1">
-                                Website
-                            </label>
-                            <input
-                                type="url"
-                                id="website"
-                                name="website"
-                                value={formData.website}
-                                onChange={handleInputChange}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            />
-                        </div>
-                    </div>
-
-                    <div className="mt-4">
-                        <label htmlFor="bio" className="block text-sm font-medium text-gray-700 mb-1">
-                            Bio
-                        </label>
-                        <textarea
-                            id="bio"
-                            name="bio"
-                            rows={3}
-                            value={formData.bio}
-                            onChange={handleInputChange}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            placeholder="Tell people about yourself..."
+            {/* Main Content */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* Form Section */}
+                <div className={showPreview ? 'hidden lg:block' : ''}>
+                    <div className="bg-white rounded-lg shadow-sm border p-6">
+                        <h2 className="text-lg font-semibold text-gray-900 mb-6">Card Information</h2>
+                        <CardForm
+                            card={selectedCard}
+                            onSave={handleUpdateCard}
+                            onCancel={() => setCurrentView('cards')}
+                            onPreview={handlePreview}
+                            onChange={handleFormChange}
+                            isEditing={true}
+                            isSubmitting={isSubmitting}
+                            showPreviewButton={true}
+                            isPremium={isPremium}
                         />
                     </div>
                 </div>
 
-                <div className="bg-white rounded-lg shadow-sm border p-6">
-                    <h2 className="text-lg font-semibold text-gray-900 mb-4">Social Media</h2>
+                {/* Preview Section */}
+                <div className={!showPreview ? 'hidden lg:block' : ''}>
+                    <div className="bg-gray-50 rounded-lg p-6 min-h-[600px] flex items-center justify-center">
+                        {previewCard ? (
+                            <div className="w-full max-w-sm">
+                                <h3 className="text-lg font-semibold text-gray-900 mb-4 text-center">
+                                    Live Preview
+                                </h3>
+                                <CardPreview
+                                    card={previewCard}
+                                    setCurrentView={() => {}}
+                                    setSelectedCard={() => {}}
+                                    isPreview={true}
+                                />
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label htmlFor="linkedin" className="block text-sm font-medium text-gray-700 mb-1">
-                                LinkedIn
-                            </label>
-                            <input
-                                type="url"
-                                id="linkedin"
-                                name="linkedin"
-                                value={formData.linkedin}
-                                onChange={handleInputChange}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                placeholder="https://linkedin.com/in/username"
-                            />
-                        </div>
-
-                        <div>
-                            <label htmlFor="twitter" className="block text-sm font-medium text-gray-700 mb-1">
-                                Twitter
-                            </label>
-                            <input
-                                type="url"
-                                id="twitter"
-                                name="twitter"
-                                value={formData.twitter}
-                                onChange={handleInputChange}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                placeholder="https://twitter.com/username"
-                            />
-                        </div>
-
-                        <div>
-                            <label htmlFor="instagram" className="block text-sm font-medium text-gray-700 mb-1">
-                                Instagram
-                            </label>
-                            <input
-                                type="url"
-                                id="instagram"
-                                name="instagram"
-                                value={formData.instagram}
-                                onChange={handleInputChange}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                placeholder="https://instagram.com/username"
-                            />
-                        </div>
+                                {showPreview && (
+                                    <div className="mt-6 flex space-x-3">
+                                        <Button
+                                            variant="outline"
+                                            onClick={handleBackToEdit}
+                                            className="flex-1"
+                                        >
+                                            <ArrowLeft className="h-4 w-4 mr-2" />
+                                            Edit
+                                        </Button>
+                                        <Button
+                                            onClick={() => handleUpdateCard(previewCard)}
+                                            loading={isSubmitting}
+                                            disabled={isSubmitting}
+                                            icon={Save}
+                                            className="flex-1"
+                                        >
+                                            Save Changes
+                                        </Button>
+                                    </div>
+                                )}
+                            </div>
+                        ) : (
+                            <div className="text-center">
+                                <div className="w-24 h-24 bg-gray-200 rounded-full mx-auto mb-4 flex items-center justify-center">
+                                    <Eye className="h-12 w-12 text-gray-400" />
+                                </div>
+                                <h3 className="text-lg font-medium text-gray-900 mb-2">Preview Your Changes</h3>
+                                <p className="text-gray-500">
+                                    Make changes to see a live preview of your updated card
+                                </p>
+                            </div>
+                        )}
                     </div>
                 </div>
+            </div>
 
-                {/* Form Actions */}
-                <div className="flex items-center justify-between pt-6">
-                    <Link
-                        to="/cards"
-                        className="px-6 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                    >
-                        Cancel
-                    </Link>
+            {/* Mobile Preview Mode */}
+            {showPreview && (
+                <div className="lg:hidden mt-8">
+                    <div className="bg-white rounded-lg shadow-sm border p-6">
+                        <div className="flex items-center justify-between mb-6">
+                            <h2 className="text-lg font-semibold text-gray-900">Card Preview</h2>
+                            <Button
+                                variant="outline"
+                                onClick={handleBackToEdit}
+                                icon={ArrowLeft}
+                                size="sm"
+                            >
+                                Edit
+                            </Button>
+                        </div>
 
-                    <button
-                        type="submit"
-                        disabled={saving}
-                        className="bg-blue-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center space-x-2"
-                    >
-                        {saving ? (
-                            <>
-                                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                                <span>Saving...</span>
-                            </>
-                        ) : (
-                            <>
-                                <Save className="h-4 w-4" />
-                                <span>Save Changes</span>
-                            </>
+                        {previewCard && (
+                            <div className="max-w-sm mx-auto">
+                                <CardPreview
+                                    card={previewCard}
+                                    setCurrentView={() => {}}
+                                    setSelectedCard={() => {}}
+                                    isPreview={true}
+                                />
+
+                                <div className="mt-6">
+                                    <Button
+                                        onClick={() => handleUpdateCard(previewCard)}
+                                        loading={isSubmitting}
+                                        disabled={isSubmitting}
+                                        icon={Save}
+                                        fullWidth
+                                    >
+                                        Save Changes
+                                    </Button>
+                                </div>
+                            </div>
                         )}
-                    </button>
+                    </div>
                 </div>
-            </form>
+            )}
+
+            {/* Delete Confirmation Modal */}
+            <Modal
+                isOpen={showDeleteModal}
+                onClose={() => setShowDeleteModal(false)}
+                title="Delete Card"
+            >
+                <div className="p-6">
+                    <p className="text-gray-600 mb-6">
+                        Are you sure you want to delete this card? This action cannot be undone.
+                    </p>
+                    <div className="flex space-x-3">
+                        <Button
+                            variant="outline"
+                            onClick={() => setShowDeleteModal(false)}
+                            disabled={isDeleting}
+                            className="flex-1"
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={handleDeleteCard}
+                            loading={isDeleting}
+                            disabled={isDeleting}
+                            className="flex-1 bg-red-600 hover:bg-red-700"
+                        >
+                            Delete Card
+                        </Button>
+                    </div>
+                </div>
+            </Modal>
         </div>
     );
 };

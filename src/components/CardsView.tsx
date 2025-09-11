@@ -89,19 +89,29 @@ const CardsView: React.FC = () => {
                                 {card.profileImage ? (
                                     <img
                                         src={card.profileImage}
-                                        alt={card.name}
+                                        alt={`${card.firstName || ''} ${card.lastName || ''}`.trim()}
                                         className="w-12 h-12 rounded-full object-cover"
                                     />
                                 ) : (
                                     <div className="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center">
                                         <span className="text-gray-500 font-medium">
-                                            {card.name.split(' ').map(n => n[0]).join('').toUpperCase()}
+                                            {(() => {
+                                                const fullName = `${card.firstName || ''} ${card.lastName || ''}`.trim();
+                                                if (!fullName) return '?';
+                                                return fullName.split(' ')
+                                                    .filter(n => n)
+                                                    .map(n => n[0])
+                                                    .join('')
+                                                    .toUpperCase();
+                                            })()}
                                         </span>
                                     </div>
                                 )}
                                 <div>
-                                    <h3 className="font-semibold text-gray-900">{card.name}</h3>
-                                    <p className="text-sm text-gray-600">{card.title}</p>
+                                    <h3 className="font-semibold text-gray-900">
+                                        {`${card.firstName || ''} ${card.lastName || ''}`.trim() || 'Unnamed Card'}
+                                    </h3>
+                                    <p className="text-sm text-gray-600">{card.title || 'No title'}</p>
                                 </div>
                             </div>
 
@@ -110,7 +120,7 @@ const CardsView: React.FC = () => {
                             )}
 
                             <div className="flex items-center space-x-4 text-sm text-gray-500">
-                                <span>Views: {card.views || 0}</span>
+                                <span>Views: {card.views || card.scanCount || 0}</span>
                                 <span>•</span>
                                 <span>Active</span>
                             </div>
@@ -145,7 +155,11 @@ const CardsView: React.FC = () => {
                             </div>
 
                             <div className="relative">
-                                <button className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors">
+                                <button
+                                    onClick={() => handleDeleteCard(card.id)}
+                                    className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                                    title="More options"
+                                >
                                     <MoreVertical className="h-4 w-4" />
                                 </button>
                                 {/* You can add a dropdown menu here for more actions like delete */}
