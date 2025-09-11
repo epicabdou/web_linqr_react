@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { useStore } from '@nanostores/react';
 import Navigation from './components/Navigation';
 import Dashboard from './components/Dashboard';
@@ -21,7 +21,6 @@ import {
 } from './stores/authStore';
 import {
     $cards,
-    $selectedCard,
     cardsActions
 } from './stores/cardsStore';
 
@@ -54,11 +53,55 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     return (
         <div className="min-h-screen bg-gray-50">
             <Navigation />
-            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <main>
                 {children}
             </main>
         </div>
     );
+};
+
+// EditCardView wrapper that handles URL params
+const EditCardViewWrapper: React.FC = () => {
+    const { cardId } = useParams<{ cardId: string }>();
+
+    if (!cardId || isNaN(parseInt(cardId))) {
+        return <Navigate to="/cards" replace />;
+    }
+
+    return <EditCardView />;
+};
+
+// PublicCardView wrapper that handles URL params
+const PublicCardViewWrapper: React.FC = () => {
+    const { cardId } = useParams<{ cardId: string }>();
+
+    if (!cardId || isNaN(parseInt(cardId))) {
+        return (
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+                <div className="text-center">
+                    <h1 className="text-2xl font-bold text-gray-900 mb-4">Card Not Found</h1>
+                    <p className="text-gray-600">The card you're looking for doesn't exist.</p>
+                </div>
+            </div>
+        );
+    }
+
+    return <PublicCardView />;
+};
+
+// CreateCardView wrapper that checks permissions
+const CreateCardViewWrapper: React.FC = () => {
+    const isPremium = useStore($isPremium);
+    const cards = useStore($cards);
+
+    // Check if user can create more cards
+    const canCreate = isPremium ? cards.length < 5 : cards.length < 1;
+
+    if (!canCreate) {
+        return <Navigate to="/upgrade" replace />;
+    }
+
+    return <CreateCardView />;
 };
 
 // Landing/Login page component
@@ -78,13 +121,13 @@ const LandingPage: React.FC = () => {
                         Create and share digital business cards that make lasting connections.
                         Share your professional information with a simple QR code scan.
                     </p>
-                    <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                    <div className="space-y-4 sm:space-y-0 sm:space-x-4 sm:flex sm:justify-center">
                         <button
                             onClick={() => {
                                 setAuthMode('signup');
                                 setShowAuthModal(true);
                             }}
-                            className="bg-blue-600 text-white px-8 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors"
+                            className="w-full sm:w-auto bg-blue-600 text-white px-8 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors"
                         >
                             Get Started Free
                         </button>
@@ -93,31 +136,31 @@ const LandingPage: React.FC = () => {
                                 setAuthMode('signin');
                                 setShowAuthModal(true);
                             }}
-                            className="border border-gray-300 text-gray-700 px-8 py-3 rounded-lg font-medium hover:bg-gray-50 transition-colors"
+                            className="w-full sm:w-auto bg-white text-blue-600 border border-blue-600 px-8 py-3 rounded-lg font-medium hover:bg-blue-50 transition-colors"
                         >
                             Sign In
                         </button>
                     </div>
                 </div>
 
-                {/* Features Section */}
+                {/* Features section */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-16">
                     <div className="text-center">
-                        <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <span className="text-2xl">🎯</span>
+                        <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <span className="text-2xl">🎨</span>
                         </div>
-                        <h3 className="text-xl font-semibold text-gray-900 mb-2">Easy to Create</h3>
+                        <h3 className="text-xl font-semibold text-gray-900 mb-2">Beautiful Templates</h3>
                         <p className="text-gray-600">
-                            Build professional digital business cards in minutes with our intuitive interface.
+                            Choose from professionally designed templates that make you stand out.
                         </p>
                     </div>
                     <div className="text-center">
-                        <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <span className="text-2xl">📱</span>
+                        <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <span className="text-2xl">⚡</span>
                         </div>
                         <h3 className="text-xl font-semibold text-gray-900 mb-2">Instant Sharing</h3>
                         <p className="text-gray-600">
-                            Share your card via QR code, link, or directly through social platforms.
+                            Share your card instantly with QR codes, links, or direct contact exchange.
                         </p>
                     </div>
                     <div className="text-center">
@@ -130,15 +173,16 @@ const LandingPage: React.FC = () => {
                         </p>
                     </div>
                 </div>
-            </div>
 
-            {showAuthModal && (
-                <AuthModal
-                    isOpen={showAuthModal}
-                    onClose={() => setShowAuthModal(false)}
-                    initialMode={authMode}
-                />
-            )}
+                {showAuthModal && (
+                    <AuthModal
+                        isOpen={showAuthModal}
+                        onClose={() => setShowAuthModal(false)}
+                        mode={authMode}
+                        onModeChange={setAuthMode}
+                    />
+                )}
+            </div>
         </div>
     );
 };
@@ -147,15 +191,17 @@ const App: React.FC = () => {
     const isAuthenticated = useStore($isAuthenticated);
     const authLoading = useStore($authLoading);
 
-    // Initialize data when user is authenticated
+    // Initialize auth when app starts
+    useEffect(() => {
+        authActions.initialize();
+    }, []);
+
+    // Fetch cards when user is authenticated
     useEffect(() => {
         if (isAuthenticated) {
             cardsActions.fetchCards();
         }
     }, [isAuthenticated]);
-
-    // Auth is automatically initialized when the store is imported
-    // The initialize function is called automatically in authStore.ts
 
     if (authLoading) {
         return <Loading />;
@@ -164,7 +210,7 @@ const App: React.FC = () => {
     return (
         <Router>
             <Routes>
-                {/* Public routes */}
+                {/* Public Routes */}
                 <Route
                     path="/login"
                     element={
@@ -174,13 +220,13 @@ const App: React.FC = () => {
                     }
                 />
 
-                {/* Public card view (accessible without auth) */}
+                {/* Public card view - no authentication required */}
                 <Route
                     path="/card/:cardId"
-                    element={<PublicCardView />}
+                    element={<PublicCardViewWrapper />}
                 />
 
-                {/* Protected routes */}
+                {/* Protected Routes */}
                 <Route
                     path="/dashboard"
                     element={
@@ -208,7 +254,7 @@ const App: React.FC = () => {
                     element={
                         <ProtectedRoute>
                             <AppLayout>
-                                <CreateCardView />
+                                <CreateCardViewWrapper />
                             </AppLayout>
                         </ProtectedRoute>
                     }
@@ -219,7 +265,7 @@ const App: React.FC = () => {
                     element={
                         <ProtectedRoute>
                             <AppLayout>
-                                <EditCardView />
+                                <EditCardViewWrapper />
                             </AppLayout>
                         </ProtectedRoute>
                     }

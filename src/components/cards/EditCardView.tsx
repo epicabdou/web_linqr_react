@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useStore } from '@nanostores/react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Save, Eye, Trash2 } from 'lucide-react';
-import { cardsActions, $cardsLoading, $cardsError, $selectedCard, $isPremium } from '../../stores';
+import { cardsActions, $cardsLoading, $cardsError, $cards, $isPremium } from '../../stores';
 import Button from '../ui/Button';
 import CardForm from './CardForm';
 import CardPreview from './CardPreview';
@@ -9,29 +10,62 @@ import Loading from '../ui/Loading';
 import Modal from '../ui/Modal';
 import { Card } from '../../types';
 
-interface EditCardViewProps {
-    setCurrentView: (view: string) => void;
-}
-
-const EditCardView: React.FC<EditCardViewProps> = ({ setCurrentView }) => {
+const EditCardView: React.FC = () => {
+    const navigate = useNavigate();
+    const { cardId } = useParams<{ cardId: string }>();
+    const [selectedCard, setSelectedCard] = useState<Card | null>(null);
     const [showPreview, setShowPreview] = useState(false);
     const [previewCard, setPreviewCard] = useState<Card | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     const [currentFormData, setCurrentFormData] = useState<Partial<Card> | null>(null);
+    const [isLoadingCard, setIsLoadingCard] = useState(true);
 
     const loading = useStore($cardsLoading);
     const error = useStore($cardsError);
-    const selectedCard = useStore($selectedCard);
+    const cards = useStore($cards);
     const isPremium = useStore($isPremium);
 
-    // Redirect if no card is selected
+    // Find and set the selected card when cards are loaded or cardId changes
     useEffect(() => {
-        if (!loading && !selectedCard) {
-            setCurrentView('cards');
+        if (cardId && cards.length > 0) {
+            const card = cards.find(c => c.id === parseInt(cardId));
+            if (card) {
+                setSelectedCard(card);
+                setIsLoadingCard(false);
+            } else {
+                // Card not found in current cards, try to fetch it
+                loadCard();
+            }
+        } else if (cardId && cards.length === 0) {
+            // Cards not loaded yet, try to fetch them first
+            cardsActions.fetchCards();
         }
-    }, [loading, selectedCard, setCurrentView]);
+    }, [cardId, cards]);
+
+    const loadCard = async () => {
+        if (!cardId || isNaN(parseInt(cardId))) {
+            navigate('/cards');
+            return;
+        }
+
+        setIsLoadingCard(true);
+        try {
+            const result = await cardsActions.getCard(parseInt(cardId));
+            if (result.success && result.data) {
+                setSelectedCard(result.data);
+            } else {
+                console.error('Failed to load card:', result.error);
+                navigate('/cards');
+            }
+        } catch (error) {
+            console.error('Error loading card:', error);
+            navigate('/cards');
+        } finally {
+            setIsLoadingCard(false);
+        }
+    };
 
     // Auto-update preview when form data changes
     useEffect(() => {
@@ -51,6 +85,7 @@ const EditCardView: React.FC<EditCardViewProps> = ({ setCurrentView }) => {
                 customLinks: currentFormData.customLinks || selectedCard.customLinks,
                 template: currentFormData.template || selectedCard.template
             };
+
             setPreviewCard(mockCard);
         }
     }, [currentFormData, selectedCard]);
@@ -58,26 +93,16 @@ const EditCardView: React.FC<EditCardViewProps> = ({ setCurrentView }) => {
     const handleUpdateCard = async (cardData: Partial<Card>) => {
         if (!selectedCard) return;
 
+        setIsSubmitting(true);
         try {
-            setIsSubmitting(true);
-            cardsActions.clearError();
-
-            // Validate required fields
-            if (!cardData.firstName || !cardData.lastName || !cardData.email) {
-                throw new Error('First name, last name, and email are required');
-            }
-
             const result = await cardsActions.updateCard(selectedCard.id, cardData);
-
             if (result.success) {
-                // Success! Redirect to cards view
-                setCurrentView('cards');
+                navigate('/cards');
             } else {
-                // Error handled by store
                 console.error('Failed to update card:', result.error);
             }
-        } catch (err) {
-            console.error('Card update error:', err);
+        } catch (error) {
+            console.error('Error updating card:', error);
         } finally {
             setIsSubmitting(false);
         }
@@ -86,49 +111,31 @@ const EditCardView: React.FC<EditCardViewProps> = ({ setCurrentView }) => {
     const handleDeleteCard = async () => {
         if (!selectedCard) return;
 
+        setIsDeleting(true);
         try {
-            setIsDeleting(true);
-            cardsActions.clearError();
-
             const result = await cardsActions.deleteCard(selectedCard.id);
-
             if (result.success) {
-                // Success! Redirect to cards view
-                setShowDeleteModal(false);
-                setCurrentView('cards');
+                navigate('/cards');
             } else {
-                // Error handled by store
                 console.error('Failed to delete card:', result.error);
             }
-        } catch (err) {
-            console.error('Card deletion error:', err);
+        } catch (error) {
+            console.error('Error deleting card:', error);
         } finally {
             setIsDeleting(false);
+            setShowDeleteModal(false);
         }
     };
 
-    const handlePreview = (cardData: Partial<Card>) => {
-        if (!selectedCard) return;
-
-        // Create a preview card with updated data
-        const mockCard: Card = {
-            ...selectedCard,
-            firstName: cardData.firstName || selectedCard.firstName,
-            lastName: cardData.lastName || selectedCard.lastName,
-            title: cardData.title || selectedCard.title,
-            industry: cardData.industry || selectedCard.industry,
-            bio: cardData.bio || selectedCard.bio,
-            photo: cardData.photo || selectedCard.photo,
-            phone: cardData.phone || selectedCard.phone,
-            email: cardData.email || selectedCard.email,
-            address: cardData.address || selectedCard.address,
-            socialMedia: cardData.socialMedia || selectedCard.socialMedia,
-            customLinks: cardData.customLinks || selectedCard.customLinks,
-            template: cardData.template || selectedCard.template
-        };
-
-        setPreviewCard(mockCard);
-        setShowPreview(true);
+    const handlePreview = () => {
+        if (currentFormData && selectedCard) {
+            const mockCard: Card = {
+                ...selectedCard,
+                ...currentFormData
+            };
+            setPreviewCard(mockCard);
+            setShowPreview(true);
+        }
     };
 
     const handleFormChange = (cardData: Partial<Card>) => {
@@ -139,7 +146,11 @@ const EditCardView: React.FC<EditCardViewProps> = ({ setCurrentView }) => {
         setShowPreview(false);
     };
 
-    if (loading) {
+    const handleNavigateBack = () => {
+        navigate('/cards');
+    };
+
+    if (isLoadingCard || loading) {
         return (
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
                 <Loading centered text="Loading card..." />
@@ -151,10 +162,16 @@ const EditCardView: React.FC<EditCardViewProps> = ({ setCurrentView }) => {
         return (
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
                 <div className="text-center py-12">
-                    <p className="text-gray-500">Card not found</p>
+                    <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <span className="text-3xl">❌</span>
+                    </div>
+                    <h2 className="text-2xl font-bold text-gray-900 mb-4">Card Not Found</h2>
+                    <p className="text-gray-600 mb-8">
+                        The card you're trying to edit doesn't exist or you don't have permission to edit it.
+                    </p>
                     <Button
-                        onClick={() => setCurrentView('cards')}
-                        className="mt-4"
+                        onClick={handleNavigateBack}
+                        className="bg-blue-600 hover:bg-blue-700 text-white"
                     >
                         Back to Cards
                     </Button>
@@ -170,7 +187,7 @@ const EditCardView: React.FC<EditCardViewProps> = ({ setCurrentView }) => {
                 <div className="flex items-center space-x-4">
                     <Button
                         variant="ghost"
-                        onClick={() => setCurrentView('cards')}
+                        onClick={handleNavigateBack}
                         icon={ArrowLeft}
                     >
                         Back to Cards
@@ -188,58 +205,56 @@ const EditCardView: React.FC<EditCardViewProps> = ({ setCurrentView }) => {
                     </div>
                 </div>
 
-                {/* Actions */}
                 <div className="flex items-center space-x-3">
                     {!showPreview && (
-                        <Button
-                            variant="outline"
-                            onClick={() => setShowDeleteModal(true)}
-                            icon={Trash2}
-                            className="text-red-600 hover:text-red-700 border-red-200 hover:border-red-300"
-                        >
-                            Delete
-                        </Button>
+                        <>
+                            <Button
+                                variant="outline"
+                                onClick={handlePreview}
+                                icon={Eye}
+                                disabled={!currentFormData}
+                            >
+                                Preview
+                            </Button>
+                            <Button
+                                variant="outline"
+                                onClick={() => setShowDeleteModal(true)}
+                                icon={Trash2}
+                                className="text-red-600 border-red-300 hover:bg-red-50"
+                            >
+                                Delete
+                            </Button>
+                        </>
                     )}
                 </div>
             </div>
 
-            {/* Error Display */}
             {error && (
                 <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
-                    <p className="text-sm text-red-700">{error}</p>
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={cardsActions.clearError}
-                        className="mt-2"
-                    >
-                        Dismiss
-                    </Button>
+                    <p className="text-red-600">{error}</p>
                 </div>
             )}
 
-            {/* Main Content */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 {/* Form Section */}
                 <div className={showPreview ? 'hidden lg:block' : ''}>
                     <div className="bg-white rounded-lg shadow-sm border p-6">
-                        <h2 className="text-lg font-semibold text-gray-900 mb-6">Card Information</h2>
+                        <h2 className="text-xl font-semibold text-gray-900 mb-6">
+                            Card Information
+                        </h2>
                         <CardForm
                             card={selectedCard}
-                            onSave={handleUpdateCard}
-                            onCancel={() => setCurrentView('cards')}
-                            onPreview={handlePreview}
+                            onSubmit={handleUpdateCard}
                             onChange={handleFormChange}
-                            isEditing={true}
                             isSubmitting={isSubmitting}
-                            showPreviewButton={true}
-                            isPremium={isPremium}
+                            submitButtonText="Update Card"
+                            submitButtonIcon={Save}
                         />
                     </div>
                 </div>
 
                 {/* Preview Section */}
-                <div className={!showPreview ? 'hidden lg:block' : ''}>
+                <div className={showPreview ? '' : 'hidden lg:block'}>
                     <div className="bg-gray-50 rounded-lg p-6 min-h-[600px] flex items-center justify-center">
                         {previewCard ? (
                             <div className="w-full max-w-sm">
@@ -248,8 +263,6 @@ const EditCardView: React.FC<EditCardViewProps> = ({ setCurrentView }) => {
                                 </h3>
                                 <CardPreview
                                     card={previewCard}
-                                    setCurrentView={() => {}}
-                                    setSelectedCard={() => {}}
                                     isPreview={true}
                                 />
 
@@ -276,61 +289,14 @@ const EditCardView: React.FC<EditCardViewProps> = ({ setCurrentView }) => {
                                 )}
                             </div>
                         ) : (
-                            <div className="text-center">
-                                <div className="w-24 h-24 bg-gray-200 rounded-full mx-auto mb-4 flex items-center justify-center">
-                                    <Eye className="h-12 w-12 text-gray-400" />
-                                </div>
-                                <h3 className="text-lg font-medium text-gray-900 mb-2">Preview Your Changes</h3>
-                                <p className="text-gray-500">
-                                    Make changes to see a live preview of your updated card
-                                </p>
+                            <div className="text-center text-gray-500">
+                                <Eye className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                                <p>Make changes to see a live preview</p>
                             </div>
                         )}
                     </div>
                 </div>
             </div>
-
-            {/* Mobile Preview Mode */}
-            {showPreview && (
-                <div className="lg:hidden mt-8">
-                    <div className="bg-white rounded-lg shadow-sm border p-6">
-                        <div className="flex items-center justify-between mb-6">
-                            <h2 className="text-lg font-semibold text-gray-900">Card Preview</h2>
-                            <Button
-                                variant="outline"
-                                onClick={handleBackToEdit}
-                                icon={ArrowLeft}
-                                size="sm"
-                            >
-                                Edit
-                            </Button>
-                        </div>
-
-                        {previewCard && (
-                            <div className="max-w-sm mx-auto">
-                                <CardPreview
-                                    card={previewCard}
-                                    setCurrentView={() => {}}
-                                    setSelectedCard={() => {}}
-                                    isPreview={true}
-                                />
-
-                                <div className="mt-6">
-                                    <Button
-                                        onClick={() => handleUpdateCard(previewCard)}
-                                        loading={isSubmitting}
-                                        disabled={isSubmitting}
-                                        icon={Save}
-                                        fullWidth
-                                    >
-                                        Save Changes
-                                    </Button>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            )}
 
             {/* Delete Confirmation Modal */}
             <Modal
@@ -338,11 +304,12 @@ const EditCardView: React.FC<EditCardViewProps> = ({ setCurrentView }) => {
                 onClose={() => setShowDeleteModal(false)}
                 title="Delete Card"
             >
-                <div className="p-6">
-                    <p className="text-gray-600 mb-6">
-                        Are you sure you want to delete this card? This action cannot be undone.
+                <div className="space-y-4">
+                    <p className="text-gray-600">
+                        Are you sure you want to delete "{selectedCard.firstName} {selectedCard.lastName}"?
+                        This action cannot be undone and all analytics data will be lost.
                     </p>
-                    <div className="flex space-x-3">
+                    <div className="flex space-x-3 pt-4">
                         <Button
                             variant="outline"
                             onClick={() => setShowDeleteModal(false)}
@@ -355,7 +322,7 @@ const EditCardView: React.FC<EditCardViewProps> = ({ setCurrentView }) => {
                             onClick={handleDeleteCard}
                             loading={isDeleting}
                             disabled={isDeleting}
-                            className="flex-1 bg-red-600 hover:bg-red-700"
+                            className="flex-1 bg-red-600 hover:bg-red-700 text-white"
                         >
                             Delete Card
                         </Button>

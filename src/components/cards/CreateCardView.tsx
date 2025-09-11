@@ -1,125 +1,99 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useStore } from '@nanostores/react';
-import { ArrowLeft, Save, Eye } from 'lucide-react';
-import { cardsActions, $loading, $error } from '../../stores/cardsStore';
-import { $isPremium } from '../../stores/authStore';
+import { useNavigate } from 'react-router-dom';
+import { ArrowLeft, Save, Eye, X } from 'lucide-react';
+import { cardsActions, $cardsLoading, $cardsError, $cards, $isPremium } from '../../stores';
 import Button from '../ui/Button';
 import CardForm from './CardForm';
 import CardPreview from './CardPreview';
 import Loading from '../ui/Loading';
 import { Card } from '../../types';
 
-interface CreateCardViewProps {
-    setCurrentView: (view: string) => void;
-}
-
-const CreateCardView: React.FC<CreateCardViewProps> = ({ setCurrentView }) => {
+const CreateCardView: React.FC = () => {
+    const navigate = useNavigate();
     const [showPreview, setShowPreview] = useState(false);
-    const [previewCard, setPreviewCard] = useState<Partial<Card> | null>(null);
+    const [previewCard, setPreviewCard] = useState<Card | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [currentFormData, setCurrentFormData] = useState<Partial<Card> | null>(null);
 
-    const loading = useStore($loading);
-    const error = useStore($error);
+    const loading = useStore($cardsLoading);
+    const error = useStore($cardsError);
+    const cards = useStore($cards);
     const isPremium = useStore($isPremium);
 
-    // Auto-update preview when form data changes
-    useEffect(() => {
-        if (currentFormData && (currentFormData.firstName || currentFormData.lastName || currentFormData.email)) {
+    // Check if user can create cards
+    const canCreate = isPremium ? cards.length < 5 : cards.length < 1;
+    if (!canCreate) {
+        navigate('/upgrade');
+        return null;
+    }
+
+    const handleCreateCard = async (cardData: Partial<Card>) => {
+        setIsSubmitting(true);
+        try {
+            const result = await cardsActions.createCard(cardData);
+            if (result.success) {
+                navigate('/cards');
+            } else {
+                if (result.error?.includes('limit')) {
+                    navigate('/upgrade');
+                }
+                console.error('Failed to create card:', result.error);
+            }
+        } catch (error) {
+            console.error('Error creating card:', error);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handlePreview = () => {
+        if (previewCard) {
+            setShowPreview(true);
+        }
+    };
+
+    // Use useCallback to prevent infinite re-renders
+    const handleFormChange = useCallback((cardData: Partial<Card>) => {
+        // Only create preview card if we have essential data
+        if (cardData.firstName || cardData.lastName || cardData.email) {
             const mockCard: Card = {
-                id: 999, // Mock ID for preview
-                firstName: currentFormData.firstName || '',
-                lastName: currentFormData.lastName || '',
-                title: currentFormData.title || '',
-                industry: currentFormData.industry || '',
-                bio: currentFormData.bio || '',
-                photo: currentFormData.photo || null,
-                phone: currentFormData.phone || '',
-                email: currentFormData.email || '',
-                address: currentFormData.address || '',
-                socialMedia: currentFormData.socialMedia || {},
-                customLinks: currentFormData.customLinks || [],
-                template: currentFormData.template || 'modern',
+                id: 0, // Temporary ID for preview
+                firstName: cardData.firstName || '',
+                lastName: cardData.lastName || '',
+                title: cardData.title || '',
+                industry: cardData.industry || '',
+                bio: cardData.bio || '',
+                photo: cardData.photo || null,
+                phone: cardData.phone || '',
+                email: cardData.email || '',
+                address: cardData.address || '',
+                socialMedia: cardData.socialMedia || {},
+                customLinks: cardData.customLinks || [],
+                template: cardData.template || 'modern',
                 isActive: true,
                 scanCount: 0,
                 createdAt: new Date(),
                 updatedAt: new Date()
             };
             setPreviewCard(mockCard);
+        } else {
+            setPreviewCard(null);
         }
-    }, [currentFormData]);
-
-    const handleSaveCard = async (cardData: Partial<Card>) => {
-        try {
-            setIsSubmitting(true);
-            cardsActions.clearError();
-
-            // Validate required fields
-            if (!cardData.firstName || !cardData.lastName || !cardData.email) {
-                throw new Error('First name, last name, and email are required');
-            }
-
-            const result = await cardsActions.createCard(cardData);
-
-            if (result.success) {
-                // Success! Redirect to cards view
-                setCurrentView('cards');
-            } else {
-                // Error handled by store
-                console.error('Failed to create card:', result.error);
-            }
-        } catch (err) {
-            console.error('Card creation error:', err);
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
-
-    const handlePreview = (cardData: Partial<Card>) => {
-        console.log('Preview triggered with data:', cardData);
-
-        // Create a preview card with mock ID for preview
-        const mockCard: Card = {
-            id: 999, // Mock ID for preview
-            firstName: cardData.firstName || '',
-            lastName: cardData.lastName || '',
-            title: cardData.title || '',
-            industry: cardData.industry || '',
-            bio: cardData.bio || '',
-            photo: cardData.photo || null,
-            phone: cardData.phone || '',
-            email: cardData.email || '',
-            address: cardData.address || '',
-            socialMedia: cardData.socialMedia || {},
-            customLinks: cardData.customLinks || [],
-            template: cardData.template || 'modern',
-            isActive: true,
-            scanCount: 0,
-            createdAt: new Date(),
-            updatedAt: new Date()
-        };
-
-        setPreviewCard(mockCard);
-        setShowPreview(true);
-        console.log('Preview card set:', mockCard);
-    };
-
-    const handleFormChange = (cardData: Partial<Card>) => {
-        console.log('Form data changed:', cardData);
-        setCurrentFormData(cardData);
-    };
+    }, []); // Empty dependency array since we don't depend on any external values
 
     const handleBackToEdit = () => {
         setShowPreview(false);
     };
 
-    const handleManualPreview = () => {
-        if (currentFormData) {
-            handlePreview(currentFormData);
-        }
+    const handleCancel = () => {
+        navigate('/cards');
     };
 
-    if (loading && !isSubmitting) {
+    const handleNavigateBack = () => {
+        navigate('/cards');
+    };
+
+    if (loading) {
         return (
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
                 <Loading centered text="Loading..." />
@@ -134,81 +108,107 @@ const CreateCardView: React.FC<CreateCardViewProps> = ({ setCurrentView }) => {
                 <div className="flex items-center space-x-4">
                     <Button
                         variant="ghost"
-                        onClick={() => setCurrentView('cards')}
+                        onClick={handleNavigateBack}
                         icon={ArrowLeft}
                     >
                         Back to Cards
                     </Button>
                     <div>
                         <h1 className="text-3xl font-bold text-gray-900">
-                            {showPreview ? 'Preview Card' : 'Create New Card'}
+                            {showPreview ? 'Preview Your Card' : 'Create New Card'}
                         </h1>
                         <p className="mt-2 text-gray-600">
                             {showPreview
-                                ? 'Review your card before saving'
-                                : 'Build your digital business card'
+                                ? 'Review your card before creating it'
+                                : 'Fill in your information to create a digital business card'
                             }
                         </p>
                     </div>
                 </div>
 
-                {/* Manual Preview Toggle */}
-                {!showPreview && previewCard && (
-                    <Button
-                        variant="outline"
-                        onClick={handleManualPreview}
-                        icon={Eye}
-                    >
-                        Preview
-                    </Button>
-                )}
+                <div className="flex items-center space-x-3">
+                    {!showPreview && (
+                        <>
+                            <Button
+                                variant="outline"
+                                onClick={handleCancel}
+                                icon={X}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                variant="outline"
+                                onClick={handlePreview}
+                                icon={Eye}
+                                disabled={!previewCard}
+                            >
+                                Preview
+                            </Button>
+                        </>
+                    )}
+                </div>
             </div>
 
-            {/* Error Display */}
             {error && (
                 <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
-                    <p className="text-sm text-red-700">{error}</p>
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={cardsActions.clearError}
-                        className="mt-2"
-                    >
-                        Dismiss
-                    </Button>
+                    <p className="text-red-600">{error}</p>
                 </div>
             )}
 
-            {/* Main Content */}
+            {/* Account Limit Info */}
+            <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h3 className="text-sm font-medium text-blue-900">
+                            {isPremium ? 'Premium Account' : 'Free Account'}
+                        </h3>
+                        <p className="text-sm text-blue-700">
+                            {isPremium
+                                ? `Creating card ${cards.length + 1} of 5`
+                                : `Creating your ${cards.length === 0 ? 'first' : 'only'} card`
+                            }
+                        </p>
+                    </div>
+                    {!isPremium && (
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => navigate('/upgrade')}
+                        >
+                            Upgrade for More
+                        </Button>
+                    )}
+                </div>
+            </div>
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 {/* Form Section */}
                 <div className={showPreview ? 'hidden lg:block' : ''}>
                     <div className="bg-white rounded-lg shadow-sm border p-6">
-                        <h2 className="text-lg font-semibold text-gray-900 mb-6">Card Information</h2>
+                        <h2 className="text-xl font-semibold text-gray-900 mb-6">
+                            Card Information
+                        </h2>
                         <CardForm
-                            onSave={handleSaveCard}
-                            onCancel={() => setCurrentView('cards')}
-                            onPreview={handlePreview}
+                            onSubmit={handleCreateCard}
                             onChange={handleFormChange}
                             isSubmitting={isSubmitting}
-                            showPreviewButton={true}
+                            submitButtonText="Create Card"
+                            submitButtonIcon={Save}
                             isPremium={isPremium}
                         />
                     </div>
                 </div>
 
                 {/* Preview Section */}
-                <div className={!showPreview ? 'hidden lg:block' : ''}>
+                <div className={showPreview ? '' : 'hidden lg:block'}>
                     <div className="bg-gray-50 rounded-lg p-6 min-h-[600px] flex items-center justify-center">
-                        {previewCard && (previewCard.firstName || previewCard.lastName || previewCard.email) ? (
+                        {previewCard ? (
                             <div className="w-full max-w-sm">
                                 <h3 className="text-lg font-semibold text-gray-900 mb-4 text-center">
                                     Live Preview
                                 </h3>
                                 <CardPreview
-                                    card={previewCard as Card}
-                                    setCurrentView={() => {}}
-                                    setSelectedCard={() => {}}
+                                    card={previewCard}
                                     isPreview={true}
                                 />
 
@@ -223,73 +223,26 @@ const CreateCardView: React.FC<CreateCardViewProps> = ({ setCurrentView }) => {
                                             Edit
                                         </Button>
                                         <Button
-                                            onClick={() => handleSaveCard(previewCard)}
+                                            onClick={() => handleCreateCard(previewCard)}
                                             loading={isSubmitting}
                                             disabled={isSubmitting}
                                             icon={Save}
                                             className="flex-1"
                                         >
-                                            Save Card
+                                            Create Card
                                         </Button>
                                     </div>
                                 )}
                             </div>
                         ) : (
-                            <div className="text-center">
-                                <div className="w-24 h-24 bg-gray-200 rounded-full mx-auto mb-4 flex items-center justify-center">
-                                    <Eye className="h-12 w-12 text-gray-400" />
-                                </div>
-                                <h3 className="text-lg font-medium text-gray-900 mb-2">Preview Your Card</h3>
-                                <p className="text-gray-500">
-                                    Fill out the form to see a live preview of your digital business card
-                                </p>
+                            <div className="text-center text-gray-500">
+                                <Eye className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                                <p>Fill in your information to see a preview</p>
                             </div>
                         )}
                     </div>
                 </div>
             </div>
-
-            {/* Mobile Preview Mode */}
-            {showPreview && (
-                <div className="lg:hidden mt-8">
-                    <div className="bg-white rounded-lg shadow-sm border p-6">
-                        <div className="flex items-center justify-between mb-6">
-                            <h2 className="text-lg font-semibold text-gray-900">Card Preview</h2>
-                            <Button
-                                variant="outline"
-                                onClick={handleBackToEdit}
-                                icon={ArrowLeft}
-                                size="sm"
-                            >
-                                Edit
-                            </Button>
-                        </div>
-
-                        {previewCard && (
-                            <div className="max-w-sm mx-auto">
-                                <CardPreview
-                                    card={previewCard as Card}
-                                    setCurrentView={() => {}}
-                                    setSelectedCard={() => {}}
-                                    isPreview={true}
-                                />
-
-                                <div className="mt-6">
-                                    <Button
-                                        onClick={() => handleSaveCard(previewCard)}
-                                        loading={isSubmitting}
-                                        disabled={isSubmitting}
-                                        icon={Save}
-                                        fullWidth
-                                    >
-                                        Save Card
-                                    </Button>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            )}
         </div>
     );
 };

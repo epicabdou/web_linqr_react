@@ -1,6 +1,6 @@
 import { atom, computed } from 'nanostores';
-import { Card } from '@/types';
-import supabase from '../lib/supabase';
+import { Card } from '../types';
+import { supabase } from '../lib/supabase';
 import { $userId, $isPremium } from './authStore';
 
 // Cards state atoms
@@ -107,6 +107,16 @@ const mapCardToDbCard = (card: Partial<Card>, userId: string) => ({
 
 // Cards actions
 export const cardsActions = {
+    // Clear error
+    clearError: () => {
+        $error.set(null);
+    },
+
+    // Set selected card
+    setSelectedCard: (card: Card | null) => {
+        $selectedCard.set(card);
+    },
+
     // Fetch user's cards
     fetchCards: async () => {
         const userId = $userId.get();
@@ -302,8 +312,14 @@ export const cardsActions = {
         }
     },
 
-    // Get card by ID (public access for sharing)
+    // Get card by ID (for user's own cards)
     getCard: async (cardId: number) => {
+        const userId = $userId.get();
+        if (!userId) {
+            $error.set('User not authenticated');
+            return { success: false, error: 'User not authenticated' };
+        }
+
         try {
             $loading.set(true);
             $error.set(null);
@@ -312,7 +328,7 @@ export const cardsActions = {
                 .from('cards')
                 .select('*')
                 .eq('id', cardId)
-                .eq('is_active', true)
+                .eq('user_id', userId)
                 .single();
 
             if (error) {
@@ -321,6 +337,7 @@ export const cardsActions = {
             }
 
             const card = mapDbCardToCard(data);
+            $selectedCard.set(card);
             return { success: true, data: card };
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Failed to get card';
@@ -328,6 +345,72 @@ export const cardsActions = {
             return { success: false, error: errorMessage };
         } finally {
             $loading.set(false);
+        }
+    },
+
+    // Get public card by ID (for public sharing - no authentication required)
+    getPublicCard: async (cardId: number) => {
+        try {
+            const { data, error } = await supabase
+                .from('cards')
+                .select('*')
+                .eq('id', cardId)
+                .eq('is_active', true)
+                .single();
+
+            if (error) {
+                return { success: false, error: error.message };
+            }
+
+            const card = mapDbCardToCard(data);
+            return { success: true, data: card };
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Failed to get public card';
+            return { success: false, error: errorMessage };
+        }
+    },
+
+    // Record card scan
+    recordScan: async (cardId: number, scanData?: any) => {
+        try {
+            const { error } = await supabase
+                .from('scans')
+                .insert({
+                    card_id: cardId,
+                    scanned_at: new Date().toISOString(),
+                    location: scanData?.location,
+                    device_info: scanData?.deviceInfo,
+                    referrer: scanData?.referrer,
+                    ip_address: scanData?.ipAddress
+                });
+
+            if (error) {
+                console.error('Failed to record scan:', error);
+                return { success: false, error: error.message };
+            }
+
+            // Update scan count in local state if this is user's card
+            const cards = $cards.get();
+            const updatedCards = cards.map(card =>
+                card.id === cardId
+                    ? { ...card, scanCount: (card.scanCount || 0) + 1 }
+                    : card
+            );
+            $cards.set(updatedCards);
+
+            // Update selected card if it's the one being scanned
+            const selectedCard = $selectedCard.get();
+            if (selectedCard?.id === cardId) {
+                $selectedCard.set({
+                    ...selectedCard,
+                    scanCount: (selectedCard.scanCount || 0) + 1
+                });
+            }
+
+            return { success: true };
+        } catch (error) {
+            console.error('Error recording scan:', error);
+            return { success: false, error: 'Failed to record scan' };
         }
     },
 
@@ -372,6 +455,11 @@ export const cardsActions = {
             );
             $cards.set(updatedCards);
 
+            // Update selected card if it's the one being toggled
+            if ($selectedCard.get()?.id === cardId) {
+                $selectedCard.set(updatedCard);
+            }
+
             return { success: true, data: updatedCard };
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Failed to toggle card status';
@@ -380,50 +468,5 @@ export const cardsActions = {
         } finally {
             $loading.set(false);
         }
-    },
-
-    // Record card scan
-    recordScan: async (cardId: number, scanData?: any) => {
-        try {
-            const { error } = await supabase
-                .from('scans')
-                .insert({
-                    card_id: cardId,
-                    scanned_at: new Date().toISOString(),
-                    location: scanData?.location,
-                    device_info: scanData?.deviceInfo,
-                    referrer: scanData?.referrer,
-                    ip_address: scanData?.ipAddress
-                });
-
-            if (error) {
-                console.error('Failed to record scan:', error);
-                return { success: false, error: error.message };
-            }
-
-            // Update scan count in local state
-            const cards = $cards.get();
-            const updatedCards = cards.map(card =>
-                card.id === cardId
-                    ? { ...card, scanCount: (card.scanCount || 0) + 1 }
-                    : card
-            );
-            $cards.set(updatedCards);
-
-            return { success: true };
-        } catch (error) {
-            console.error('Failed to record scan:', error);
-            return { success: false, error: 'Failed to record scan' };
-        }
-    },
-
-    // Set selected card
-    setSelectedCard: (card: Card | null) => {
-        $selectedCard.set(card);
-    },
-
-    // Clear error
-    clearError: () => {
-        $error.set(null);
     }
 };
