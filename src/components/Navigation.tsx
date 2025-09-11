@@ -1,36 +1,39 @@
 import React, { useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useStore } from '@nanostores/react';
 import { QrCode, Settings, LogOut, User, ChevronDown } from 'lucide-react';
 import { $userEmail, $isPremium, authActions } from '../stores/authStore';
 
-interface NavigationProps {
-    currentView: string;
-    setCurrentView: (view: string) => void;
-}
-
-const Navigation: React.FC<NavigationProps> = ({
-                                                   currentView,
-                                                   setCurrentView
-                                               }) => {
+const Navigation: React.FC = () => {
     const [showUserMenu, setShowUserMenu] = useState(false);
+    const location = useLocation();
+    const navigate = useNavigate();
     const userEmail = useStore($userEmail);
     const isPremium = useStore($isPremium);
 
     const navigationItems = [
-        { key: 'dashboard', label: 'Dashboard' },
-        { key: 'cards', label: 'My Cards' },
-        { key: 'contacts', label: 'Contacts' },
-        { key: 'analytics', label: 'Analytics' }
+        { key: 'dashboard', label: 'Dashboard', path: '/dashboard' },
+        { key: 'cards', label: 'My Cards', path: '/cards' },
+        { key: 'contacts', label: 'Contacts', path: '/contacts' },
+        { key: 'analytics', label: 'Analytics', path: '/analytics' }
     ];
 
     const handleLogout = async () => {
         try {
             await authActions.signOut();
-            setCurrentView('dashboard');
+            navigate('/login');
             setShowUserMenu(false);
         } catch (error) {
             console.error('Logout failed:', error);
         }
+    };
+
+    // Helper function to check if a path is active
+    const isActivePath = (path: string) => {
+        if (path === '/dashboard') {
+            return location.pathname === '/' || location.pathname === '/dashboard';
+        }
+        return location.pathname.startsWith(path);
     };
 
     return (
@@ -38,37 +41,37 @@ const Navigation: React.FC<NavigationProps> = ({
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="flex justify-between items-center h-16">
                     {/* Logo */}
-                    <div className="flex items-center space-x-2">
+                    <Link to="/dashboard" className="flex items-center space-x-2">
                         <QrCode className="h-8 w-8 text-blue-600" />
                         <span className="text-xl font-bold text-gray-900">LinQR</span>
-                    </div>
+                    </Link>
 
                     {/* Navigation Items */}
                     <div className="hidden md:flex items-center space-x-8">
                         {navigationItems.map((item) => (
-                            <button
+                            <Link
                                 key={item.key}
-                                onClick={() => setCurrentView(item.key)}
+                                to={item.path}
                                 className={`px-3 py-2 text-sm font-medium transition-colors ${
-                                    currentView === item.key
+                                    isActivePath(item.path)
                                         ? 'text-blue-600 border-b-2 border-blue-600'
                                         : 'text-gray-500 hover:text-gray-700'
                                 }`}
                             >
                                 {item.label}
-                            </button>
+                            </Link>
                         ))}
                     </div>
 
                     {/* Right Side Actions */}
                     <div className="flex items-center space-x-4">
                         {!isPremium && (
-                            <button
-                                onClick={() => setCurrentView('upgrade')}
+                            <Link
+                                to="/upgrade"
                                 className="bg-gradient-to-r from-purple-600 to-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:from-purple-700 hover:to-blue-700 transition-all"
                             >
                                 Upgrade to Premium
-                            </button>
+                            </Link>
                         )}
 
                         {/* User Menu */}
@@ -103,16 +106,14 @@ const Navigation: React.FC<NavigationProps> = ({
                                         </div>
                                     </div>
 
-                                    <button
-                                        onClick={() => {
-                                            setCurrentView('settings');
-                                            setShowUserMenu(false);
-                                        }}
-                                        className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2"
+                                    <Link
+                                        to="/settings"
+                                        onClick={() => setShowUserMenu(false)}
+                                        className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2 block"
                                     >
                                         <Settings className="h-4 w-4" />
                                         <span>Settings</span>
-                                    </button>
+                                    </Link>
 
                                     <button
                                         onClick={handleLogout}
@@ -132,17 +133,17 @@ const Navigation: React.FC<NavigationProps> = ({
             <div className="md:hidden border-t border-gray-200">
                 <div className="flex space-x-1 px-4 py-2 overflow-x-auto">
                     {navigationItems.map((item) => (
-                        <button
+                        <Link
                             key={item.key}
-                            onClick={() => setCurrentView(item.key)}
+                            to={item.path}
                             className={`px-3 py-2 text-sm font-medium rounded-lg whitespace-nowrap transition-colors ${
-                                currentView === item.key
+                                isActivePath(item.path)
                                     ? 'bg-blue-100 text-blue-700'
                                     : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
                             }`}
                         >
                             {item.label}
-                        </button>
+                        </Link>
                     ))}
                 </div>
             </div>

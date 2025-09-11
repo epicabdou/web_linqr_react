@@ -20,11 +20,7 @@ import ContactForm from './ContactForm';
 import ContactCard from './ContactCard';
 import { Contact } from '../../types';
 
-interface ContactsManagementProps {
-    setCurrentView: (view: string) => void;
-}
-
-const ContactsManagement: React.FC<ContactsManagementProps> = ({ setCurrentView }) => {
+const ContactsManagement: React.FC = () => {
     const contacts = useStore($contacts);
     const filteredContacts = useStore($filteredContacts);
     const loading = useStore($loading);
@@ -82,7 +78,7 @@ const ContactsManagement: React.FC<ContactsManagementProps> = ({ setCurrentView 
     }
 
     return (
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div>
             {/* Header */}
             <div className="flex justify-between items-center mb-8">
                 <div>
@@ -121,57 +117,45 @@ const ContactsManagement: React.FC<ContactsManagementProps> = ({ setCurrentView 
                     >
                         Filters {selectedTags.length > 0 && `(${selectedTags.length})`}
                     </Button>
-
-                    {/* Clear Filters */}
-                    {(searchQuery || selectedTags.length > 0) && (
-                        <Button
-                            variant="ghost"
-                            onClick={contactsActions.clearFilters}
-                        >
-                            Clear
-                        </Button>
-                    )}
                 </div>
 
                 {/* Filters Panel */}
                 {showFilters && (
-                    <div className="mt-6 pt-6 border-t">
-                        <h3 className="text-sm font-medium text-gray-900 mb-3">Filter by tags:</h3>
+                    <div className="mt-4 pt-4 border-t border-gray-200">
+                        <h4 className="text-sm font-medium text-gray-900 mb-3">Filter by Tags</h4>
                         <div className="flex flex-wrap gap-2">
                             {allTags.map(tag => (
                                 <button
                                     key={tag}
                                     onClick={() => handleTagToggle(tag)}
-                                    className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium transition-colors ${
+                                    className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
                                         selectedTags.includes(tag)
                                             ? 'bg-blue-100 text-blue-800 border border-blue-200'
                                             : 'bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200'
                                     }`}
                                 >
-                                    <Tag className="h-3 w-3 mr-1" />
+                                    <Tag className="h-3 w-3 inline mr-1" />
                                     {tag}
                                 </button>
                             ))}
-                            {allTags.length === 0 && (
-                                <p className="text-sm text-gray-500">No tags available</p>
-                            )}
                         </div>
+
+                        {selectedTags.length > 0 && (
+                            <button
+                                onClick={contactsActions.clearFilters}
+                                className="mt-3 text-sm text-blue-600 hover:text-blue-800"
+                            >
+                                Clear all filters
+                            </button>
+                        )}
                     </div>
                 )}
             </div>
 
-            {/* Error Message */}
+            {/* Error State */}
             {error && (
-                <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-6">
-                    <p className="text-sm text-red-700">{error}</p>
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={contactsActions.clearError}
-                        className="mt-2"
-                    >
-                        Dismiss
-                    </Button>
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+                    <p className="text-red-800">{error}</p>
                 </div>
             )}
 

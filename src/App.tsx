@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { useStore } from '@nanostores/react';
 import Navigation from './components/Navigation';
 import Dashboard from './components/Dashboard';
@@ -10,6 +11,7 @@ import ContactsManagement from './components/contacts/ContactsManagement';
 import AnalyticsDashboard from './components/analytics/AnalyticsDashboard';
 import SettingsView from './components/SettingsView';
 import AuthModal from './components/auth/AuthModal';
+import PublicCardView from './components/cards/PublicCardView';
 import Loading from './components/ui/Loading';
 import {
     $isAuthenticated,
@@ -22,199 +24,272 @@ import {
     $selectedCard,
     cardsActions
 } from './stores/cardsStore';
-import Button from "./components/ui/Button";
 
-const App: React.FC = () => {
-    const [currentView, setCurrentView] = useState('dashboard');
-    const [showAuthModal, setShowAuthModal] = useState(false);
-    const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
-
-    // Use store values instead of local state
+// Protected Route component
+const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const isAuthenticated = useStore($isAuthenticated);
     const authLoading = useStore($authLoading);
-    const cards = useStore($cards);
-    const selectedCard = useStore($selectedCard);
-    const isPremium = useStore($isPremium);
+
+    if (authLoading) {
+        return <Loading />;
+    }
+
+    return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace />;
+};
+
+// Public Route component (redirects to dashboard if authenticated)
+const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    const isAuthenticated = useStore($isAuthenticated);
+    const authLoading = useStore($authLoading);
+
+    if (authLoading) {
+        return <Loading />;
+    }
+
+    return !isAuthenticated ? <>{children}</> : <Navigate to="/dashboard" replace />;
+};
+
+// Layout component for authenticated routes
+const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    return (
+        <div className="min-h-screen bg-gray-50">
+            <Navigation />
+            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                {children}
+            </main>
+        </div>
+    );
+};
+
+// Landing/Login page component
+const LandingPage: React.FC = () => {
+    const [showAuthModal, setShowAuthModal] = React.useState(true);
+    const [authMode, setAuthMode] = React.useState<'signin' | 'signup'>('signin');
+
+    return (
+        <div className="min-h-screen bg-gray-50">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                <div className="text-center py-12">
+                    <div className="w-24 h-24 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <span className="text-4xl">💼</span>
+                    </div>
+                    <h1 className="text-4xl font-bold text-gray-900 mb-4">Welcome to LinQR</h1>
+                    <p className="text-xl text-gray-600 mb-8 max-w-2xl mx-auto">
+                        Create and share digital business cards that make lasting connections.
+                        Share your professional information with a simple QR code scan.
+                    </p>
+                    <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                        <button
+                            onClick={() => {
+                                setAuthMode('signup');
+                                setShowAuthModal(true);
+                            }}
+                            className="bg-blue-600 text-white px-8 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors"
+                        >
+                            Get Started Free
+                        </button>
+                        <button
+                            onClick={() => {
+                                setAuthMode('signin');
+                                setShowAuthModal(true);
+                            }}
+                            className="border border-gray-300 text-gray-700 px-8 py-3 rounded-lg font-medium hover:bg-gray-50 transition-colors"
+                        >
+                            Sign In
+                        </button>
+                    </div>
+                </div>
+
+                {/* Features Section */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-16">
+                    <div className="text-center">
+                        <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <span className="text-2xl">🎯</span>
+                        </div>
+                        <h3 className="text-xl font-semibold text-gray-900 mb-2">Easy to Create</h3>
+                        <p className="text-gray-600">
+                            Build professional digital business cards in minutes with our intuitive interface.
+                        </p>
+                    </div>
+                    <div className="text-center">
+                        <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <span className="text-2xl">📱</span>
+                        </div>
+                        <h3 className="text-xl font-semibold text-gray-900 mb-2">Instant Sharing</h3>
+                        <p className="text-gray-600">
+                            Share your card via QR code, link, or directly through social platforms.
+                        </p>
+                    </div>
+                    <div className="text-center">
+                        <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <span className="text-2xl">📊</span>
+                        </div>
+                        <h3 className="text-xl font-semibold text-gray-900 mb-2">Track Engagement</h3>
+                        <p className="text-gray-600">
+                            See how many people view your card and track your networking success.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            {showAuthModal && (
+                <AuthModal
+                    isOpen={showAuthModal}
+                    onClose={() => setShowAuthModal(false)}
+                    initialMode={authMode}
+                />
+            )}
+        </div>
+    );
+};
+
+const App: React.FC = () => {
+    const isAuthenticated = useStore($isAuthenticated);
+    const authLoading = useStore($authLoading);
 
     // Initialize data when user is authenticated
     useEffect(() => {
         if (isAuthenticated) {
-            // Fetch user's cards
             cardsActions.fetchCards();
-            setShowAuthModal(false);
         }
     }, [isAuthenticated]);
 
-    // Show auth modal for unauthenticated users
-    useEffect(() => {
-        if (!authLoading && !isAuthenticated) {
-            setShowAuthModal(true);
-        }
-    }, [authLoading, isAuthenticated]);
+    // Auth is automatically initialized when the store is imported
+    // The initialize function is called automatically in authStore.ts
 
-    const handleSignOut = async () => {
-        try {
-            await authActions.signOut();
-            setCurrentView('dashboard');
-            setShowAuthModal(true);
-        } catch (error) {
-            console.error('Logout failed:', error);
-        }
-    };
-
-    const renderCurrentView = () => {
-        if (!isAuthenticated) {
-            return (
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                    <div className="text-center py-12">
-                        <div className="w-24 h-24 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                            <span className="text-4xl">💼</span>
-                        </div>
-                        <h1 className="text-4xl font-bold text-gray-900 mb-4">Welcome to LinQR</h1>
-                        <p className="text-xl text-gray-600 mb-8 max-w-2xl mx-auto">
-                            Create and share digital business cards that make lasting connections.
-                            Build your professional network with beautiful, interactive cards.
-                        </p>
-
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto mb-12">
-                            <div className="text-center p-6">
-                                <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mx-auto mb-4">
-                                    <span className="text-2xl">⚡</span>
-                                </div>
-                                <h3 className="text-lg font-semibold text-gray-900 mb-2">Instant Sharing</h3>
-                                <p className="text-gray-600">Share your card via QR code, link, or direct contact</p>
-                            </div>
-
-                            <div className="text-center p-6">
-                                <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mx-auto mb-4">
-                                    <span className="text-2xl">📊</span>
-                                </div>
-                                <h3 className="text-lg font-semibold text-gray-900 mb-2">Analytics</h3>
-                                <p className="text-gray-600">Track scans and engagement with detailed analytics</p>
-                            </div>
-
-                            <div className="text-center p-6">
-                                <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mx-auto mb-4">
-                                    <span className="text-2xl">🎨</span>
-                                </div>
-                                <h3 className="text-lg font-semibold text-gray-900 mb-2">Custom Templates</h3>
-                                <p className="text-gray-600">Choose from beautiful, professional templates</p>
-                            </div>
-                        </div>
-
-                        <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                            <Button
-                                onClick={() => {
-                                    setAuthMode('signup');
-                                    setShowAuthModal(true);
-                                }}
-                                size="lg"
-                                className="px-8"
-                            >
-                                Get Started Free
-                            </Button>
-                            <Button
-                                variant="outline"
-                                onClick={() => {
-                                    setAuthMode('signin');
-                                    setShowAuthModal(true);
-                                }}
-                                size="lg"
-                                className="px-8"
-                            >
-                                Sign In
-                            </Button>
-                        </div>
-                    </div>
-                </div>
-            );
-        }
-
-        switch (currentView) {
-            case 'dashboard':
-                return (
-                    <Dashboard
-                        cards={cards}
-                        setCurrentView={setCurrentView}
-                    />
-                );
-            case 'cards':
-                return (
-                    <CardsView
-                        cards={cards}
-                        isPremium={isPremium}
-                        setCurrentView={setCurrentView}
-                        setSelectedCard={(card) => cardsActions.setSelectedCard(card)}
-                    />
-                );
-            case 'create-card':
-                return <CreateCardView setCurrentView={setCurrentView} />;
-            case 'edit-card':
-                return <EditCardView setCurrentView={setCurrentView} />;
-            case 'upgrade':
-                return (
-                    <UpgradeView
-                        currentView={currentView}
-                        setCurrentView={setCurrentView}
-                        cards={cards}
-                        setCards={() => {}} // Not needed with store
-                        selectedCard={selectedCard}
-                        setSelectedCard={(card) => cardsActions.setSelectedCard(card)}
-                        isPremium={isPremium}
-                        setIsPremium={() => {}} // Not needed with store
-                    />
-                );
-            case 'contacts':
-                return <ContactsManagement setCurrentView={setCurrentView} />;
-            case 'analytics':
-                return <AnalyticsDashboard setCurrentView={setCurrentView} />;
-            case 'settings':
-                return (
-                    <SettingsView
-                        currentView={currentView}
-                        setCurrentView={setCurrentView}
-                        cards={cards}
-                        setCards={() => {}} // Not needed with store
-                        selectedCard={selectedCard}
-                        setSelectedCard={(card) => cardsActions.setSelectedCard(card)}
-                        isPremium={isPremium}
-                        setIsPremium={() => {}} // Not needed with store
-                    />
-                );
-            default:
-                return (
-                    <Dashboard
-                        cards={cards}
-                        setCurrentView={setCurrentView}
-                    />
-                );
-        }
-    };
-
-    // Show loading screen during initial auth check
     if (authLoading) {
-        return (
-            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-                <Loading centered text="Loading LinQR..." />
-            </div>
-        );
+        return <Loading />;
     }
 
     return (
-        <div className="min-h-screen bg-gray-50">
-            <Navigation
-                currentView={currentView}
-                setCurrentView={setCurrentView}
-            />
-            {renderCurrentView()}
+        <Router>
+            <Routes>
+                {/* Public routes */}
+                <Route
+                    path="/login"
+                    element={
+                        <PublicRoute>
+                            <LandingPage />
+                        </PublicRoute>
+                    }
+                />
 
-            {/* Authentication Modal */}
-            <AuthModal
-                isOpen={showAuthModal}
-                onClose={() => !isAuthenticated ? {} : setShowAuthModal(false)}
-                defaultMode={authMode}
-            />
-        </div>
+                {/* Public card view (accessible without auth) */}
+                <Route
+                    path="/card/:cardId"
+                    element={<PublicCardView />}
+                />
+
+                {/* Protected routes */}
+                <Route
+                    path="/dashboard"
+                    element={
+                        <ProtectedRoute>
+                            <AppLayout>
+                                <Dashboard />
+                            </AppLayout>
+                        </ProtectedRoute>
+                    }
+                />
+
+                <Route
+                    path="/cards"
+                    element={
+                        <ProtectedRoute>
+                            <AppLayout>
+                                <CardsView />
+                            </AppLayout>
+                        </ProtectedRoute>
+                    }
+                />
+
+                <Route
+                    path="/cards/create"
+                    element={
+                        <ProtectedRoute>
+                            <AppLayout>
+                                <CreateCardView />
+                            </AppLayout>
+                        </ProtectedRoute>
+                    }
+                />
+
+                <Route
+                    path="/cards/edit/:cardId"
+                    element={
+                        <ProtectedRoute>
+                            <AppLayout>
+                                <EditCardView />
+                            </AppLayout>
+                        </ProtectedRoute>
+                    }
+                />
+
+                <Route
+                    path="/contacts"
+                    element={
+                        <ProtectedRoute>
+                            <AppLayout>
+                                <ContactsManagement />
+                            </AppLayout>
+                        </ProtectedRoute>
+                    }
+                />
+
+                <Route
+                    path="/analytics"
+                    element={
+                        <ProtectedRoute>
+                            <AppLayout>
+                                <AnalyticsDashboard />
+                            </AppLayout>
+                        </ProtectedRoute>
+                    }
+                />
+
+                <Route
+                    path="/upgrade"
+                    element={
+                        <ProtectedRoute>
+                            <AppLayout>
+                                <UpgradeView />
+                            </AppLayout>
+                        </ProtectedRoute>
+                    }
+                />
+
+                <Route
+                    path="/settings"
+                    element={
+                        <ProtectedRoute>
+                            <AppLayout>
+                                <SettingsView />
+                            </AppLayout>
+                        </ProtectedRoute>
+                    }
+                />
+
+                {/* Default redirects */}
+                <Route
+                    path="/"
+                    element={
+                        isAuthenticated ?
+                            <Navigate to="/dashboard" replace /> :
+                            <Navigate to="/login" replace />
+                    }
+                />
+
+                {/* Catch all route - redirect to dashboard or login */}
+                <Route
+                    path="*"
+                    element={
+                        isAuthenticated ?
+                            <Navigate to="/dashboard" replace /> :
+                            <Navigate to="/login" replace />
+                    }
+                />
+            </Routes>
+        </Router>
     );
 };
 

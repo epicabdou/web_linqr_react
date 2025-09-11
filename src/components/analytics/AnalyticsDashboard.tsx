@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useStore } from '@nanostores/react';
 import {
     BarChart3,
@@ -18,11 +19,8 @@ import Button from '../ui/Button';
 import Loading from '../ui/Loading';
 import { Analytics } from '../../types';
 
-interface AnalyticsDashboardProps {
-    setCurrentView: (view: string) => void;
-}
-
-const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ setCurrentView }) => {
+const AnalyticsDashboard: React.FC = () => {
+    const navigate = useNavigate();
     const cards = useStore($cards);
     const totalScans = useStore($totalScans);
     const contactsCount = useStore($contactsCount);
@@ -85,34 +83,28 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ setCurrentView 
 
     if (!isPremium) {
         return (
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                <div className="text-center py-12">
-                    <BarChart3 className="h-16 w-16 text-gray-400 mx-auto mb-6" />
-                    <h2 className="text-2xl font-bold text-gray-900 mb-4">Premium Analytics</h2>
-                    <p className="text-gray-600 mb-8 max-w-md mx-auto">
-                        Upgrade to Premium to unlock detailed analytics and insights about your digital business cards.
-                    </p>
-                    <Button
-                        onClick={() => setCurrentView('upgrade')}
-                        size="lg"
-                    >
-                        Upgrade to Premium
-                    </Button>
-                </div>
+            <div className="text-center py-12">
+                <BarChart3 className="h-16 w-16 text-gray-400 mx-auto mb-6" />
+                <h2 className="text-2xl font-bold text-gray-900 mb-4">Premium Analytics</h2>
+                <p className="text-gray-600 mb-8 max-w-md mx-auto">
+                    Upgrade to Premium to unlock detailed analytics and insights about your digital business cards.
+                </p>
+                <Button
+                    onClick={() => navigate('/upgrade')}
+                    size="lg"
+                >
+                    Upgrade to Premium
+                </Button>
             </div>
         );
     }
 
     if (loading) {
-        return (
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                <Loading centered text="Loading analytics..." />
-            </div>
-        );
+        return <Loading centered text="Loading analytics..." />;
     }
 
     return (
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div>
             {/* Header */}
             <div className="flex justify-between items-center mb-8">
                 <div>
@@ -203,21 +195,19 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ setCurrentView 
                                 : 0;
 
                             return (
-                                <div key={device.type} className="flex items-center">
-                                    <div className="flex items-center space-x-3 flex-1">
-                                        <Smartphone className="h-5 w-5 text-gray-400" />
-                                        <span className="text-sm font-medium text-gray-900">{device.type}</span>
-                                    </div>
+                                <div key={index} className="flex items-center justify-between">
                                     <div className="flex items-center space-x-3">
+                                        <Smartphone className="h-4 w-4 text-gray-400" />
+                                        <span className="text-sm text-gray-900">{device.type}</span>
+                                    </div>
+                                    <div className="flex items-center space-x-2">
                                         <div className="w-20 bg-gray-200 rounded-full h-2">
                                             <div
                                                 className="bg-blue-600 h-2 rounded-full"
                                                 style={{ width: `${percentage}%` }}
                                             ></div>
                                         </div>
-                                        <span className="text-sm text-gray-600 w-12 text-right">
-                      {percentage}%
-                    </span>
+                                        <span className="text-sm font-medium text-gray-700">{percentage}%</span>
                                     </div>
                                 </div>
                             );
@@ -226,26 +216,23 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ setCurrentView 
                 </div>
             </div>
 
-            {/* Location Analytics */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Geographic Distribution and Recent Activity */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
                 {/* Top Locations */}
                 <div className="bg-white p-6 rounded-lg shadow-sm border">
                     <h3 className="text-lg font-semibold text-gray-900 mb-4">Top Locations</h3>
                     <div className="space-y-4">
                         {analytics?.topLocations.map((location, index) => (
-                            <div key={`${location.city}-${location.country}`} className="flex items-center justify-between">
+                            <div key={index} className="flex items-center justify-between">
                                 <div className="flex items-center space-x-3">
-                  <span className="text-sm font-medium text-gray-500 w-4">
-                    #{index + 1}
-                  </span>
                                     <MapPin className="h-4 w-4 text-gray-400" />
                                     <span className="text-sm text-gray-900">
-                    {location.city}, {location.country}
-                  </span>
+                                        {location.city}, {location.country}
+                                    </span>
                                 </div>
                                 <span className="text-sm font-medium text-gray-700">
-                  {location.count} scans
-                </span>
+                                    {location.count} scans
+                                </span>
                             </div>
                         ))}
                     </div>
