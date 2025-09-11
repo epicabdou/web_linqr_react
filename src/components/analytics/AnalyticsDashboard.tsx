@@ -298,9 +298,9 @@ const AnalyticsDashboard: React.FC = () => {
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <div>
                                                     <div className="text-sm font-medium text-gray-900">
-                                                        {card.firstName} {card.lastName}
+                                                        {card.firstName || ''} {card.lastName || ''}
                                                     </div>
-                                                    <div className="text-sm text-gray-500">{card.title}</div>
+                                                    <div className="text-sm text-gray-500">{card.title || 'No title'}</div>
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">

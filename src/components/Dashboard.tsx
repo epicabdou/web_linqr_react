@@ -143,7 +143,7 @@ const Dashboard: React.FC = () => {
                                         {card.photo ? (
                                             <img
                                                 src={card.photo}
-                                                alt={`${card.firstName} ${card.lastName}`}
+                                                alt={`${card.firstName || ''} ${card.lastName || ''}`}
                                                 className="w-10 h-10 rounded-full object-cover"
                                             />
                                         ) : (

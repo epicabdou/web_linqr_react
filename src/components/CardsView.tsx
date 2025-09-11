@@ -21,7 +21,7 @@ const CardsView: React.FC = () => {
 
     const handleShareCard = (card: Card) => {
         const shareUrl = `${window.location.origin}/card/${card.id}`;
-        const fullName = `${card.firstName} ${card.lastName}`;
+        const fullName = `${card.firstName || ''} ${card.lastName || ''}`.trim();
 
         if (navigator.share) {
             navigator.share({
