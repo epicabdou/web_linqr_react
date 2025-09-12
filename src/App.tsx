@@ -9,7 +9,7 @@ import EditCardView from './components/cards/EditCardView';
 import UpgradeView from './components/UpgradeView';
 import ContactsView from './components/ContactsView';
 import AnalyticsView from './components/AnalyticsView';
-import SettingsView from './components/SettingsView';
+import SettingsView from './components/SettingsView.tsx';
 import AuthModal from './components/auth/AuthModal';
 import PublicCardView from './components/cards/PublicCardView';
 import Loading from './components/ui/Loading';
