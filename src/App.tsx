@@ -7,8 +7,8 @@ import CardsView from './components/CardsView';
 import CreateCardView from './components/cards/CreateCardView';
 import EditCardView from './components/cards/EditCardView';
 import UpgradeView from './components/UpgradeView';
-import ContactsManagement from './components/contacts/ContactsManagement';
-import AnalyticsDashboard from './components/analytics/AnalyticsDashboard';
+import ContactsView from './components/ContactsView';
+import AnalyticsView from './components/AnalyticsView';
 import SettingsView from './components/SettingsView';
 import AuthModal from './components/auth/AuthModal';
 import PublicCardView from './components/cards/PublicCardView';
@@ -276,7 +276,7 @@ const App: React.FC = () => {
                     element={
                         <ProtectedRoute>
                             <AppLayout>
-                                <ContactsManagement />
+                                <ContactsView />
                             </AppLayout>
                         </ProtectedRoute>
                     }
@@ -287,7 +287,7 @@ const App: React.FC = () => {
                     element={
                         <ProtectedRoute>
                             <AppLayout>
-                                <AnalyticsDashboard />
+                                <AnalyticsView />
                             </AppLayout>
                         </ProtectedRoute>
                     }

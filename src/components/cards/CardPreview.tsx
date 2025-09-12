@@ -127,7 +127,7 @@ const CardPreview: React.FC<CardPreviewProps> = ({
                     <img
                         src={qrUrl}
                         alt="QR Code"
-                        className="w-12 h-12 rounded border border-white border-opacity-20"
+                        className="w-18 h-18 rounded border border-white border-opacity-20"
                     />
                 </div>
 
