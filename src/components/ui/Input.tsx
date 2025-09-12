@@ -49,14 +49,14 @@ const Input: React.FC<InputProps> = ({
     const disabledClass = disabled ? 'bg-gray-100 cursor-not-allowed' : '';
 
     const inputClasses = `
-        ${baseClasses}
-        ${sizeClasses[size]}
-        ${widthClass}
-        ${errorClass}
-        ${disabledClass}
-        ${Icon ? (iconPosition === 'left' ? 'pl-10' : 'pr-10') : ''}
-        ${className}
-    `.trim();
+    ${baseClasses}
+    ${sizeClasses[size]}
+    ${widthClass}
+    ${errorClass}
+    ${disabledClass}
+    ${Icon ? (iconPosition === 'left' ? 'pl-10' : 'pr-10') : ''}
+    ${className}
+  `.trim();
 
     return (
         <div className={fullWidth ? 'w-full' : ''}>
